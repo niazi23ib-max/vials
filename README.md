@@ -1,36 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Vial — Peptide Tracker
 
-## Getting Started
+A minimalist, mobile-first tracker for peptides, supplements, and medications —
+a dosing **calendar**, vial **inventory**, and reconstitution **calculator**, in a
+warm-dark editorial aesthetic.
 
-First, run the development server:
+Implemented from a [Claude Design](https://claude.ai/design) handoff (`Vial`),
+recreated faithfully in **Next.js 16 + React 19 + TypeScript** (the prototype's
+React-with-inline-styles ported to typed components; exact tokens, fonts, and
+layouts preserved).
+
+> ⚠️ **Not medical advice.** Seed values are illustrative. Always double-check
+> every calculation and follow guidance from a qualified professional.
+
+## Screens
+
+- **Today** — greeting, adherence ring, an "up next" card, today's protocol with
+  one-tap logging, and low-stock / expiry alerts.
+- **Schedule** — a weekly timeline (real current week) with per-day dose dots.
+- **Vials** — inventory cards with the signature vial-fill gauge, runway (days
+  left), doses remaining, remaining value, and low-stock / expiring filters.
+- **Calculator** — reconstitution math (with a U-100 syringe visual) + titration
+  ramp charts.
+- **Detail** — per-substance deep dive: runway bar, draw/concentration/cost-per-dose,
+  schedule, and recent history.
+- A center **"+"** logs a dose from anywhere.
+
+## Quick start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app runs entirely client-side: it ships with seed substances (Retatrutide,
+MOTS-c, Semax, Selank) and persists your logged doses to `localStorage`
+(`vial.taken`). No backend required to explore it.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Design fidelity notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+A few intentional adaptations from the static prototype:
 
-## Learn More
+- **Decorative status chips** render as `<span>` (the prototype used `<button>`,
+  which is invalid nested inside the clickable vial cards).
+- **Dates are live** — the Today greeting and the Schedule week are derived from
+  the real current date rather than the prototype's hardcoded Wednesday.
+- The design-tool "tweaks panel" (accent/typography switcher) is omitted; its
+  chosen defaults (amber accent, Newsreader headings, warm surface) are baked in.
 
-To learn more about Next.js, take a look at the following resources:
+## Tech & structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Next.js 16** App Router, **Tailwind v4** (tokens live in `globals.css`),
+  fonts via `next/font` (Newsreader · Hanken Grotesk · IBM Plex Mono).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/                 layout (fonts) · page (renders <VialApp/>) · globals.css
+  components/vial/
+    VialApp.tsx        shell: tabs, FAB, detail overlay, state + persistence
+    ui.tsx             VialFill, Monogram, Label, Chip, Dot, Icon, Sheet
+    Today / Schedule / Inventory / Calculator / Detail / LogSheet
+    types.ts           the shared `AppApi` controller type
+  lib/substances.ts    domain model, seed data, runway/recon helpers
+  lib/supabase/        cloud-sync clients (dormant — see below)
+  proxy.ts             Supabase session refresh (no-op until configured)
+supabase/migrations/   SQL schema + RLS, ready for cloud sync
+```
 
-## Deploy on Vercel
+## Optional: cloud sync (dormant)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+An earlier iteration wired Supabase (accounts + Postgres + row-level security).
+Those pieces are kept but inactive: the SQL schema in
+`supabase/migrations/0001_init.sql`, the clients in `src/lib/supabase/`, and
+`.env.local.example`. To migrate persistence from `localStorage` to synced
+accounts, point `lib/substances` state at Supabase and add the
+`NEXT_PUBLIC_SUPABASE_*` env vars.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Build
+
+```bash
+npm run build
+```

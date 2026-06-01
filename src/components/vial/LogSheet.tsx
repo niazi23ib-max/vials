@@ -1,0 +1,81 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { doseLabel, recon, fillPct } from '@/lib/substances';
+import { Sheet, Monogram, Label, Icon, VialFill } from './ui';
+import type { AppApi } from './types';
+
+export function LogSheet({
+  open,
+  subId,
+  app,
+  onClose,
+}: {
+  open: boolean;
+  subId: string | null;
+  app: AppApi;
+  onClose: () => void;
+}) {
+  const [chosen, setChosen] = useState<string | null>(subId);
+  useEffect(() => {
+    setChosen(subId);
+  }, [subId, open]);
+
+  const s = app.substances.find((x) => x.id === chosen);
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Log a dose">
+      <div style={{ padding: '16px 22px 0' }}>
+        {!s ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {app.substances.map((x) => (
+              <button
+                key={x.id}
+                onClick={() => setChosen(x.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 14, cursor: 'pointer', textAlign: 'left' }}
+              >
+                <Monogram name={x.name} hue={x.hue} size={36} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--text)' }}>{x.name}</div>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{doseLabel(x)} · {x.route}</div>
+                </div>
+                <Icon.arrow style={{ color: 'var(--text-faint)' }} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', padding: '4px 0 18px' }}>
+              <VialFill pct={fillPct(s)} hue={s.hue} w={32} h={78} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--text)' }}>{s.name}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{doseLabel(s)} · {recon(s.vialMg, s.bacMl, s.doseMcg).units.toFixed(1)} units</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Today · {s.time} {s.period} · {s.route}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => { app.confirmLog(s.id); onClose(); }}
+              style={{ width: '100%', padding: '15px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap' }}
+            >
+              <Icon.check /> Confirm dose
+            </button>
+            <button
+              onClick={() => { app.skipLog(s.id); onClose(); }}
+              style={{ width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 16, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 12.5, cursor: 'pointer' }}
+            >
+              Mark as skipped
+            </button>
+            {!subId && (
+              <button
+                onClick={() => setChosen(null)}
+                style={{ width: '100%', padding: '10px 0', marginTop: 8, border: 'none', background: 'transparent', color: 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}
+              >
+                ← Choose another
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
