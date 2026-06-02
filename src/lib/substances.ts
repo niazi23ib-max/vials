@@ -64,6 +64,8 @@ export interface Substance {
   pricePerVial: number;
   lot: string;
   titration: TitrationStep[] | null;
+  /** ISO date the vial was added — the floor for adherence/history (no "missed" before this). */
+  created: string;
 }
 
 export const substanceForm = (s: Substance): Form => formOf(s.route);
@@ -72,9 +74,19 @@ export const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as co
 
 export const ok = (l: number, c: number, h: number) => `oklch(${l} ${c} ${h})`;
 
+/** Local YYYY-MM-DD (the canonical key for dose logs — avoids UTC day-shift). */
+export function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Today's weekday name (Mon…Sun) from the real date. */
 export function todayName(now = new Date()): string {
   return DAY_ORDER[(now.getDay() + 6) % 7];
+}
+
+/** Weekday name (Mon…Sun) for an ISO date string. */
+export function weekdayOf(iso: string): string {
+  return DAY_ORDER[(new Date(iso + 'T00:00:00').getDay() + 6) % 7];
 }
 
 export interface WeekDay {
@@ -95,7 +107,7 @@ export function currentWeek(now = new Date()): WeekDay[] {
       name,
       d: date.getDate(),
       mo: date.toLocaleDateString('en-US', { month: 'short' }),
-      iso: date.toISOString().slice(0, 10),
+      iso: isoDate(date),
       isToday: name === tn,
     };
   });
@@ -207,6 +219,114 @@ export function fmtExpiry(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+// ── Dose-log model + adherence ───────────────────────────────────
+export type DoseStatus = 'taken' | 'skipped';
+/** Logs keyed by `${substanceId}|${isoDate}`. */
+export type LogMap = Record<string, DoseStatus>;
+export const logKey = (subId: string, iso: string) => `${subId}|${iso}`;
+
+/** Most recent dates this substance is scheduled (today-or-earlier, on/after it was added), newest first. */
+export function recentScheduledDates(sub: Substance, count: number, now = new Date()): string[] {
+  if (!sub.days.length) return [];
+  const floor = sub.created || '';
+  const out: string[] = [];
+  const d = new Date(now);
+  for (let i = 0; i < 730 && out.length < count; i++) {
+    const iso = isoDate(d);
+    if (floor && iso < floor) break;
+    if (sub.days.includes(DAY_ORDER[(d.getDay() + 6) % 7])) out.push(iso);
+    d.setDate(d.getDate() - 1);
+  }
+  return out;
+}
+
+/** Whether a substance is "active" (added on/before) a given date. */
+const activeOn = (s: Substance, iso: string) => !s.created || iso >= s.created;
+
+export type HistoryStatus = 'taken' | 'skipped' | 'missed' | 'pending';
+export interface HistoryEntry {
+  iso: string;
+  label: string;
+  status: HistoryStatus;
+}
+/** Recent dose history for the detail screen: scheduled days mapped to taken/skipped/missed/pending. */
+export function doseHistory(sub: Substance, logs: LogMap, count = 6, now = new Date()): HistoryEntry[] {
+  const todayIso = isoDate(now);
+  return recentScheduledDates(sub, count, now).map((iso) => {
+    const s = logs[logKey(sub.id, iso)];
+    return {
+      iso,
+      label: new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      status: s === 'taken' ? 'taken' : s === 'skipped' ? 'skipped' : iso === todayIso ? 'pending' : 'missed',
+    };
+  });
+}
+
+export interface Adherence {
+  taken: number;
+  skipped: number;
+  missed: number;
+  /** taken ÷ (taken + missed) — skips and not-yet-due doses excluded. */
+  pct: number;
+}
+/** Adherence across all substances over the trailing `days` window (includes today). */
+export function adherence(subs: Substance[], logs: LogMap, days: number, now = new Date()): Adherence {
+  const todayIso = isoDate(now);
+  let taken = 0, skipped = 0, missed = 0;
+  const d = new Date(now);
+  for (let i = 0; i < days; i++) {
+    const iso = isoDate(d);
+    const name = DAY_ORDER[(d.getDay() + 6) % 7];
+    for (const sub of subs) {
+      if (!sub.days.includes(name) || !activeOn(sub, iso)) continue;
+      const s = logs[logKey(sub.id, iso)];
+      if (s === 'taken') taken++;
+      else if (s === 'skipped') skipped++;
+      else if (iso < todayIso) missed++; // today's pending doses don't count as missed yet
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  const denom = taken + missed;
+  return { taken, skipped, missed, pct: denom ? taken / denom : 1 };
+}
+
+/** Consecutive most-recent scheduled days where every due dose was taken or skipped (not missed). */
+export function streak(subs: Substance[], logs: LogMap, now = new Date()): number {
+  const todayIso = isoDate(now);
+  let count = 0;
+  const d = new Date(now);
+  for (let i = 0; i < 730; i++) {
+    const iso = isoDate(d);
+    const name = DAY_ORDER[(d.getDay() + 6) % 7];
+    const due = subs.filter((s) => s.days.includes(name) && activeOn(s, iso));
+    d.setDate(d.getDate() - 1);
+    if (!due.length) continue; // rest day — doesn't break or extend the streak
+    const statuses = due.map((s) => logs[logKey(s.id, iso)]);
+    const allHandled = statuses.every((s) => s === 'taken' || s === 'skipped');
+    const anyTaken = statuses.some((s) => s === 'taken');
+    if (allHandled && anyTaken) { count++; continue; }
+    // Today still pending doesn't break the streak; a past incomplete day does.
+    if (iso === todayIso) continue;
+    break;
+  }
+  return count;
+}
+
+export type DayStatus = 'none' | 'done' | 'partial' | 'missed' | 'pending' | 'future';
+/** Completion of all due doses on a single day — drives the adherence heatmap. */
+export function dayStatus(subs: Substance[], logs: LogMap, iso: string, now = new Date()): DayStatus {
+  const todayIso = isoDate(now);
+  if (iso > todayIso) return 'future';
+  const due = subs.filter((s) => s.days.includes(weekdayOf(iso)) && activeOn(s, iso));
+  if (!due.length) return 'none';
+  const st = due.map((s) => logs[logKey(s.id, iso)]);
+  const taken = st.filter((x) => x === 'taken').length;
+  const handled = st.filter((x) => x === 'taken' || x === 'skipped').length;
+  if (taken === due.length) return 'done';
+  if (taken > 0 || handled === due.length) return 'partial';
+  return iso === todayIso ? 'pending' : 'missed';
 }
 
 // ── New-vial helpers ─────────────────────────────────────────────

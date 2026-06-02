@@ -6,6 +6,7 @@ import {
   todayName, greeting, type Substance,
 } from '@/lib/substances';
 import { Monogram, Label, Icon, VialFill } from './ui';
+import { AdherencePanel } from './Stats';
 import type { AppApi } from './types';
 
 interface Ev {
@@ -132,6 +133,8 @@ export function TodayScreen({ app }: { app: AppApi }) {
           <DoseRow key={ev.id} ev={ev} taken={app.taken.has(ev.id)} onToggle={app.toggle} onOpen={app.open} />
         ))}
       </div>
+
+      <AdherencePanel app={app} />
 
       {(lowStock.length > 0 || expiring.length > 0) && (
         <div style={{ marginTop: 30 }}>

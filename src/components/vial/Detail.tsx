@@ -2,7 +2,7 @@
 
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabel, recon, ok, DAY_ORDER,
-  substanceForm, dosesPerContainer, containerLabel, fullAmount, type Substance,
+  substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
@@ -16,16 +16,10 @@ function KV({ label, value, tone }: { label: string; value: string; tone?: strin
   );
 }
 
-const RECENT = [
-  { d: 'May 29', ok: true },
-  { d: 'May 27', ok: true },
-  { d: 'May 25', ok: false },
-  { d: 'May 23', ok: true },
-];
-
 export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi; onBack: () => void }) {
   const s = sub;
   const form = substanceForm(s);
+  const history = doseHistory(s, app.logs, 6);
   const r = form === 'inject' ? recon(s.vialMg, s.bacMl, s.doseMcg) : null;
   const stock = stockStatus(s);
   const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
@@ -114,13 +108,19 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
         <div style={{ marginTop: 26 }}>
           <Label>Recent doses</Label>
           <div style={{ marginTop: 8 }}>
-            {RECENT.map((h, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: h.ok ? 'var(--green)' : 'var(--text-faint)', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text)' }}>{h.d}</span>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: h.ok ? 'var(--text-dim)' : 'var(--text-faint)', whiteSpace: 'nowrap' }}>{h.ok ? doseLabel(s) : 'Skipped'}</span>
-              </div>
-            ))}
+            {history.length === 0 ? (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-faint)', padding: '10px 0' }}>No scheduled doses yet.</div>
+            ) : history.map((h) => {
+              const color = h.status === 'taken' ? 'var(--green)' : h.status === 'skipped' ? 'var(--amber)' : h.status === 'pending' ? 'var(--text-faint)' : 'var(--red)';
+              const right = h.status === 'taken' ? doseLabel(s) : h.status === 'skipped' ? 'Skipped' : h.status === 'pending' ? 'Due today' : 'Missed';
+              return (
+                <div key={h.iso} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, opacity: h.status === 'taken' ? 1 : 0.7 }} />
+                  <span style={{ flex: 1, fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text)' }}>{h.label}</span>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: h.status === 'taken' ? 'var(--text-dim)' : color, whiteSpace: 'nowrap' }}>{right}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

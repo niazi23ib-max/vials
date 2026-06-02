@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { currentWeek, doseLabel, ok, todayName, type Substance } from '@/lib/substances';
+import { currentWeek, doseLabel, ok, todayName, isoDate, type Substance } from '@/lib/substances';
 import { Label, Monogram, Icon } from './ui';
 import type { AppApi } from './types';
 
@@ -16,24 +16,41 @@ function dayEvents(substances: Substance[], dayName: string): Ev[] {
 
 export function ScheduleScreen({ app }: { app: AppApi }) {
   const TODAY_NAME = todayName();
-  const WEEK = currentWeek();
+  const TODAY_ISO = isoDate(new Date());
+  const [weekOffset, setWeekOffset] = useState(0);
   const [sel, setSel] = useState(TODAY_NAME);
-  const events = dayEvents(app.substances, sel);
+  const base = new Date();
+  base.setDate(base.getDate() + weekOffset * 7);
+  const WEEK = currentWeek(base);
   const selObj = WEEK.find((w) => w.name === sel)!;
+  const events = dayEvents(app.substances, sel);
+  const isFuture = selObj.iso > TODAY_ISO;
   const weekTotal = WEEK.reduce((n, w) => n + dayEvents(app.substances, w.name).length, 0);
+  const weekTitle = weekOffset === 0 ? 'This week' : weekOffset === -1 ? 'Last week' : weekOffset === 1 ? 'Next week' : `${WEEK[0].mo} ${WEEK[0].d}–${WEEK[6].d}`;
+
+  const navBtn = (txt: string, fn: () => void) => (
+    <button onClick={fn} aria-label={txt} style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 16, lineHeight: 1 }}>{txt}</button>
+  );
 
   return (
     <div style={{ paddingTop: 56, paddingBottom: 96 }}>
-      <div style={{ padding: '0 20px' }}>
-        <Label>Schedule · {weekTotal} doses</Label>
-        <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 32, color: 'var(--text)', margin: '8px 0 0' }}>This week</h1>
+      <div style={{ padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <Label>Schedule · {weekTotal} doses</Label>
+          <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 32, color: 'var(--text)', margin: '8px 0 0', whiteSpace: 'nowrap' }}>{weekTitle}</h1>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {navBtn('‹', () => setWeekOffset((o) => o - 1))}
+          {weekOffset !== 0 && navBtn('•', () => setWeekOffset(0))}
+          {navBtn('›', () => setWeekOffset((o) => o + 1))}
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, padding: '20px 20px 6px', overflowX: 'auto' }}>
         {WEEK.map((w) => {
           const evs = dayEvents(app.substances, w.name);
           const isSel = w.name === sel;
-          const isToday = w.isToday;
+          const isToday = w.iso === TODAY_ISO;
           return (
             <button
               key={w.name}
@@ -60,7 +77,7 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
 
       <div style={{ padding: '20px 20px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--text)', whiteSpace: 'nowrap' }}>
-          {sel === TODAY_NAME ? 'Today' : sel}
+          {selObj.iso === TODAY_ISO ? 'Today' : sel}
           <span style={{ color: 'var(--text-faint)', fontSize: 15 }}> · {selObj.mo} {selObj.d}</span>
         </div>
         <Label>{events.length} {events.length === 1 ? 'dose' : 'doses'}</Label>
@@ -74,28 +91,41 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
           </div>
         ) : (
           events.map((ev, i) => {
-            const taken = sel === TODAY_NAME && app.taken.has(ev.subId + '-today');
+            const status = app.statusOf(ev.subId, selObj.iso);
+            const isTaken = status === 'taken';
+            const isSkipped = status === 'skipped';
+            const isMissed = !status && selObj.iso < TODAY_ISO;
+            const dot = isTaken ? 'var(--green)' : isSkipped ? 'var(--amber)' : isMissed ? 'var(--red)' : ok(0.7, 0.12, ev.hue);
+            const struck = isTaken || isSkipped;
             return (
               <div key={ev.id} style={{ display: 'flex', gap: 0, alignItems: 'stretch' }}>
-                <div style={{ width: 50, paddingTop: 14, textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'var(--mono)', fontSize: 13.5, color: 'var(--text)' }}>{ev.time}</div>
+                <div style={{ width: 44, paddingTop: 14, textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text)' }}>{ev.time}</div>
                   <div style={{ fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.1em', color: 'var(--text-faint)' }}>{ev.period}</div>
                 </div>
-                <div style={{ width: 26, position: 'relative', display: 'flex', justifyContent: 'center', marginLeft: 8 }}>
+                <div style={{ width: 22, position: 'relative', display: 'flex', justifyContent: 'center', marginLeft: 6 }}>
                   <div style={{ width: 1.5, background: 'var(--line)', position: 'absolute', top: i === 0 ? 20 : 0, bottom: i === events.length - 1 ? 'calc(100% - 28px)' : 0 }} />
-                  <div style={{ width: 11, height: 11, borderRadius: '50%', marginTop: 16, zIndex: 1, flexShrink: 0, background: taken ? 'var(--green)' : ok(0.7, 0.12, ev.hue), boxShadow: '0 0 0 4px var(--bg)' }} />
+                  <div style={{ width: 11, height: 11, borderRadius: '50%', marginTop: 16, zIndex: 1, flexShrink: 0, background: dot, opacity: isTaken || !struck && !isMissed ? 1 : 0.7, boxShadow: '0 0 0 4px var(--bg)' }} />
                 </div>
                 <button
                   onClick={() => app.open(ev.subId)}
-                  style={{ flex: 1, margin: '8px 0', marginLeft: 8, padding: '12px 14px', textAlign: 'left', cursor: 'pointer', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 12 }}
+                  style={{ flex: 1, margin: '8px 0', marginLeft: 6, padding: '11px 12px', textAlign: 'left', cursor: 'pointer', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}
                 >
-                  <Monogram name={ev.name} hue={ev.hue} size={34} />
+                  <Monogram name={ev.name} hue={ev.hue} size={32} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--serif)', fontSize: 17, color: taken ? 'var(--text-faint)' : 'var(--text)', textDecoration: taken ? 'line-through' : 'none' }}>{ev.name}</div>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{ev.dose} · {ev.route}</div>
+                    <div style={{ fontFamily: 'var(--serif)', fontSize: 16, color: struck ? 'var(--text-faint)' : 'var(--text)', textDecoration: struck ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.name}</div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: isMissed ? 'var(--red)' : 'var(--text-dim)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{isSkipped ? 'Skipped' : isMissed ? 'Missed' : `${ev.dose} · ${ev.route}`}</div>
                   </div>
-                  {taken ? <span style={{ color: 'var(--green)' }}><Icon.check /></span> : <Icon.arrow style={{ color: 'var(--text-faint)' }} />}
                 </button>
+                {!isFuture && (
+                  <button
+                    onClick={() => app.setStatus(ev.subId, selObj.iso, isTaken ? null : 'taken')}
+                    aria-label={isTaken ? 'Mark not taken' : 'Mark taken'}
+                    style={{ alignSelf: 'center', marginLeft: 8, width: 30, height: 30, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', border: isTaken ? 'none' : '1.5px solid var(--line-strong)', background: isTaken ? 'var(--green)' : 'transparent', color: isTaken ? 'var(--bg)' : 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
+                  >
+                    <Icon.check />
+                  </button>
+                )}
               </div>
             );
           })

@@ -177,6 +177,7 @@ export function AddVialSheet({
       lot: lot.trim(),
       titration: editing ? editing.titration : null,
       hue: editing ? editing.hue : pickHue(app.substances.length),
+      created: editing ? editing.created : '', // server stamps created_at; refreshed on reload
     };
 
     let fields: Omit<Substance, 'id'>;

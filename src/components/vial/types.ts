@@ -1,9 +1,15 @@
-import type { Substance } from '@/lib/substances';
+import type { Substance, LogMap, DoseStatus } from '@/lib/substances';
 
 /** The shared controller passed to every screen (mirrors the prototype's `app`). */
 export interface AppApi {
   substances: Substance[];
   taken: Set<string>;
+  /** All loaded dose logs, keyed `${subId}|${iso}` (for history, the week view, and stats). */
+  logs: LogMap;
+  /** Status of a dose on a given date, if logged. */
+  statusOf: (subId: string, iso: string) => DoseStatus | undefined;
+  /** Set (or clear, with null) a dose's status on a given date — adjusts remaining + persists. */
+  setStatus: (subId: string, iso: string, status: DoseStatus | null) => void;
   /** Toggle a today-event id (e.g. "reta-today"). */
   toggle: (eid: string) => void;
   /** Open a substance's detail screen. */

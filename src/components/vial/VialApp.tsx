@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { doseDecrement, fullAmount, type Substance } from '@/lib/substances';
+import { doseDecrement, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
 import { useSession } from '@/lib/useSession';
@@ -67,7 +67,7 @@ export function VialApp() {
   });
 
   const [subs, setSubs] = useState<Substance[]>([]);
-  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [logs, setLogs] = useState<LogMap>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -78,19 +78,21 @@ export function VialApp() {
   const [vialSheet, setVialSheet] = useState<'new' | Substance | null>(null);
 
   const loadData = useCallback(async () => {
-    const [s, logs] = await Promise.all([db.listSubstances(), db.listLogsForDate(todayISO)]);
+    const since = new Date();
+    since.setDate(since.getDate() - 120);
+    const [s, rows] = await Promise.all([db.listSubstances(), db.listLogs(isoDate(since))]);
     setSubs(s);
-    const set = new Set<string>();
-    logs.forEach((l) => {
-      if (l.status === 'taken') set.add(l.substance_id + '-today');
+    const map: LogMap = {};
+    rows.forEach((l) => {
+      map[logKey(l.substance_id, l.scheduled_date)] = l.status;
     });
-    setTaken(set);
-  }, [todayISO]);
+    setLogs(map);
+  }, []);
 
   useEffect(() => {
     if (!user) {
       setSubs([]);
-      setTaken(new Set());
+      setLogs({});
       setDataLoading(false);
       return;
     }
@@ -118,29 +120,36 @@ export function VialApp() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function applyTaken(subId: string, makeTaken: boolean) {
+  // Set/clear a dose's status on any date. Only "taken" consumes from the vial,
+  // so flipping taken⇄(skipped|cleared) restores or re-deducts one dose.
+  async function setStatus(subId: string, iso: string, status: DoseStatus | null) {
     const sub = subs.find((s) => s.id === subId);
     if (!sub) return;
-    const eid = subId + '-today';
-    if (taken.has(eid) === makeTaken) return;
+    const key = logKey(subId, iso);
+    const prev = logs[key];
+    if (prev === (status ?? undefined)) return;
+
     const dec = doseDecrement(sub);
-    const newRemaining = makeTaken
-      ? Math.max(0, sub.remaining - dec)
-      : Math.min(fullAmount(sub), sub.remaining + dec);
+    const wasTaken = prev === 'taken';
+    const willTake = status === 'taken';
+    let newRemaining = sub.remaining;
+    if (wasTaken && !willTake) newRemaining = Math.min(fullAmount(sub), sub.remaining + dec);
+    else if (!wasTaken && willTake) newRemaining = Math.max(0, sub.remaining - dec);
+    const remainingChanged = newRemaining !== sub.remaining;
 
     // optimistic
-    setTaken((prev) => {
-      const n = new Set(prev);
-      if (makeTaken) n.add(eid);
-      else n.delete(eid);
+    setLogs((prevMap) => {
+      const n = { ...prevMap };
+      if (status === null) delete n[key];
+      else n[key] = status;
       return n;
     });
-    setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
+    if (remainingChanged) setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
 
     try {
-      if (makeTaken) await db.setLog(subId, todayISO, 'taken');
-      else await db.deleteLog(subId, todayISO);
-      await db.updateRemaining(subId, newRemaining);
+      if (status === null) await db.deleteLog(subId, iso);
+      else await db.setLog(subId, iso, status);
+      if (remainingChanged) await db.updateRemaining(subId, newRemaining);
     } catch {
       loadData(); // revert to server truth on failure
     }
@@ -158,15 +167,27 @@ export function VialApp() {
     await createClient().auth.signOut();
   }
 
+  const statusOf = (subId: string, iso: string) => logs[logKey(subId, iso)];
+  const takenToday = new Set<string>();
+  for (const sub of subs) {
+    if (statusOf(sub.id, todayISO) === 'taken') takenToday.add(sub.id + '-today');
+  }
+
   const app: AppApi = {
     substances: subs,
-    taken,
-    toggle: (eid) => applyTaken(eid.replace('-today', ''), !taken.has(eid)),
+    taken: takenToday,
+    logs,
+    statusOf,
+    setStatus,
+    toggle: (eid) => {
+      const subId = eid.replace('-today', '');
+      setStatus(subId, todayISO, statusOf(subId, todayISO) === 'taken' ? null : 'taken');
+    },
     open: (subId) => setDetailId(subId),
     log: (subId) => setSheet({ open: true, subId: subId ?? null }),
     openLog: () => setSheet({ open: true, subId: null }),
-    confirmLog: (subId) => applyTaken(subId, true),
-    skipLog: () => {},
+    confirmLog: (subId) => setStatus(subId, todayISO, 'taken'),
+    skipLog: (subId) => { if (subId) setStatus(subId, todayISO, 'skipped'); },
     addSubstance: async (sub) => {
       const created = await db.createSubstance(sub);
       setSubs((prev) => [...prev, created]);

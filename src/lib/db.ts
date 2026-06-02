@@ -53,6 +53,7 @@ function rowToSubstance(r: SubRow): Substance {
     pricePerVial: Number(r.price_per_vial),
     lot: r.lot ?? '',
     titration: r.titration ?? null,
+    created: r.created_at ? r.created_at.slice(0, 10) : '',
   };
 }
 
@@ -167,6 +168,17 @@ export async function listLogsForDate(dateISO: string): Promise<DoseLogRow[]> {
     .from('dose_logs')
     .select('id,substance_id,scheduled_date,status')
     .eq('scheduled_date', dateISO);
+  if (error) throw error;
+  return data as DoseLogRow[];
+}
+
+/** All of the user's dose logs on or after `sinceISO` (for history, the week view, and stats). */
+export async function listLogs(sinceISO: string): Promise<DoseLogRow[]> {
+  const { data, error } = await createClient()
+    .from('dose_logs')
+    .select('id,substance_id,scheduled_date,status')
+    .gte('scheduled_date', sinceISO)
+    .order('scheduled_date', { ascending: false });
   if (error) throw error;
   return data as DoseLogRow[];
 }
