@@ -84,7 +84,7 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
           ) : form === 'oral' ? (
             <>
               <KV label="In container" value={containerLabel(s)} />
-              <KV label="Strength" value={`${s.doseMcg} ${s.unit}`} />
+              <KV label="Strength" value={s.doseMcg > 0 ? `${s.doseMcg} ${s.unit}` : '—'} />
             </>
           ) : (
             <>

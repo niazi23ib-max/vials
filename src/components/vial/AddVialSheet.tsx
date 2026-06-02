@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate,
+  recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
   type Substance, type ScheduleKind,
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
@@ -79,6 +79,7 @@ export function AddVialSheet({
   const [error, setError] = useState<string | null>(null);
 
   const form = formOf(route);
+  const noStrength = form === 'oral' && !categoryHasStrength(category); // multivitamins: no single strength
 
   // Reset / pre-fill each time the sheet opens.
   useEffect(() => {
@@ -180,7 +181,7 @@ export function AddVialSheet({
     if (scheduleKind === 'cycle' && !(Number(cycleOn) >= 1)) return setError('Enter at least 1 day “on”.');
     if (form === 'oral') {
       if (!(cnt > 0)) return setError('Enter how many capsules/tablets are in the container.');
-      if (!(doseRaw > 0)) return setError('Enter the strength per capsule.');
+      if (!noStrength && !(doseRaw > 0)) return setError('Enter the strength per capsule.');
     } else {
       if (!(mg > 0)) return setError(form === 'inject' ? 'Enter the amount in the vial (mg).' : 'Enter the amount in the container (mg).');
       if (form === 'inject' && !(bac > 0)) return setError('Enter the bacteriostatic water (mL).');
@@ -225,7 +226,7 @@ export function AddVialSheet({
         vialMg: 0, bacMl: 0,
         count: cnt,
         capsPerDose: perDose,
-        doseMcg: doseRaw, // strength per cap, in `unit`
+        doseMcg: noStrength ? 0 : doseRaw, // strength per cap, in `unit` (0 = no single strength)
         unit: doseUnit,
         remaining: editing ? leftRemaining : cnt,
       };
@@ -298,16 +299,22 @@ export function AddVialSheet({
                 </Fld>
               </div>
             </div>
-            <Fld label="Strength per capsule">
-              <div style={{ display: 'flex', gap: 10 }}>
-                <input className="vlf" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="number" inputMode="decimal" step="any" min="0" value={doseValue} onChange={(e) => setDoseValue(e.target.value)} placeholder="500" />
-                <select className="vlf" style={{ ...inputStyle, width: 92 }} value={doseUnit} onChange={(e) => setDoseUnit(e.target.value as DoseUnit)}>
-                  <option value="mcg">mcg</option>
-                  <option value="mg">mg</option>
-                  <option value="IU">IU</option>
-                </select>
+            {noStrength ? (
+              <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', lineHeight: 1.5 }}>
+                Multivitamins have many ingredients — no single strength needed.
               </div>
-            </Fld>
+            ) : (
+              <Fld label="Strength per capsule">
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input className="vlf" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="number" inputMode="decimal" step="any" min="0" value={doseValue} onChange={(e) => setDoseValue(e.target.value)} placeholder="500" />
+                  <select className="vlf" style={{ ...inputStyle, width: 92 }} value={doseUnit} onChange={(e) => setDoseUnit(e.target.value as DoseUnit)}>
+                    <option value="mcg">mcg</option>
+                    <option value="mg">mg</option>
+                    <option value="IU">IU</option>
+                  </select>
+                </div>
+              </Fld>
+            )}
           </>
         ) : (
           <>

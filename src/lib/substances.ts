@@ -18,12 +18,13 @@ export interface TitrationStep {
 export type Form = 'inject' | 'oral' | 'dose';
 export type ScheduleKind = 'weekly' | 'interval' | 'cycle';
 
-export const CATEGORIES = ['Peptide', 'Medication', 'Vitamin', 'Supplement', 'Other'] as const;
+export const CATEGORIES = ['Peptide', 'Medication', 'Vitamin', 'Multivitamin', 'Supplement', 'Other'] as const;
 
 export const ROUTES_BY_CATEGORY: Record<string, string[]> = {
   Peptide: ['Subcutaneous', 'Intramuscular', 'Intranasal', 'Oral'],
   Medication: ['Oral', 'Sublingual', 'Subcutaneous', 'Intramuscular', 'Intranasal', 'Topical'],
   Vitamin: ['Oral', 'Sublingual'],
+  Multivitamin: ['Oral', 'Sublingual'],
   Supplement: ['Oral', 'Sublingual'],
   Other: ['Oral', 'Subcutaneous', 'Intramuscular', 'Intranasal', 'Sublingual', 'Topical'],
 };
@@ -31,6 +32,9 @@ export const ROUTES_BY_CATEGORY: Record<string, string[]> = {
 export function routesFor(category: string): string[] {
   return ROUTES_BY_CATEGORY[category] ?? ROUTES_BY_CATEGORY.Other;
 }
+
+/** Categories with no single per-capsule strength (e.g. multivitamins have many). */
+export const categoryHasStrength = (category: string): boolean => category !== 'Multivitamin';
 
 export function formOf(route: string): Form {
   if (route === 'Subcutaneous' || route === 'Intramuscular') return 'inject';
