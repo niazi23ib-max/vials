@@ -18,4 +18,10 @@ export interface AppApi {
   addSubstance: (s: Substance) => void;
   /** Open the "add vial" sheet. */
   openAddVial: () => void;
+  /** Open the edit sheet pre-filled with an existing vial. */
+  editVial: (sub: Substance) => void;
+  /** Save edits to an existing vial. */
+  updateSubstance: (id: string, s: Substance) => void;
+  /** Delete a vial from the inventory. */
+  deleteSubstance: (id: string) => void;
 }

@@ -33,13 +33,27 @@ function Fld({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: () => void; app: AppApi }) {
+export function AddVialSheet({
+  open,
+  onClose,
+  app,
+  editing,
+}: {
+  open: boolean;
+  onClose: () => void;
+  app: AppApi;
+  editing?: Substance;
+}) {
+  // Latched so the title/fields don't flip to "add" mid-dismiss animation.
+  const [mode, setMode] = useState<'add' | 'edit'>('add');
+  const isEdit = mode === 'edit';
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Peptide');
   const [klass, setKlass] = useState('');
   const [route, setRoute] = useState('Subcutaneous');
   const [vialMg, setVialMg] = useState('');
   const [bacMl, setBacMl] = useState('');
+  const [amountLeft, setAmountLeft] = useState(''); // mg remaining (edit only)
   const [doseValue, setDoseValue] = useState('');
   const [doseUnit, setDoseUnit] = useState<DoseUnit>('mcg');
   const [days, setDays] = useState<string[]>([...DAY_ORDER]);
@@ -49,29 +63,55 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
   const [lot, setLot] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  // Reset to defaults each time the sheet opens.
+  // Reset / pre-fill each time the sheet opens.
   useEffect(() => {
     if (!open) return;
-    setName('');
-    setCategory('Peptide');
-    setKlass('');
-    setRoute('Subcutaneous');
-    setVialMg('');
-    setBacMl('');
-    setDoseValue('');
-    setDoseUnit('mcg');
-    setDays([...DAY_ORDER]);
-    setTime('08:00');
-    setPrice('');
-    setExpiry(defaultExpiryISO());
-    setLot('');
     setError(null);
-  }, [open]);
+    setMode(editing ? 'edit' : 'add');
+    if (editing) {
+      setName(editing.name);
+      setCategory(editing.category);
+      setKlass(editing.sub || '');
+      setRoute(editing.route);
+      setVialMg(String(editing.vialMg));
+      setBacMl(String(editing.bacMl));
+      setAmountLeft(String(+(editing.remaining / 1000).toFixed(4)));
+      setDoseUnit(editing.unit);
+      setDoseValue(String(editing.unit === 'mg' ? editing.doseMcg / 1000 : editing.doseMcg));
+      setDays(editing.days.length ? [...editing.days] : []);
+      setTime(editing.time || '08:00');
+      setPrice(editing.pricePerVial ? String(editing.pricePerVial) : '');
+      setExpiry(editing.expiry || defaultExpiryISO());
+      setLot(editing.lot || '');
+    } else {
+      setName('');
+      setCategory('Peptide');
+      setKlass('');
+      setRoute('Subcutaneous');
+      setVialMg('');
+      setBacMl('');
+      setAmountLeft('');
+      setDoseValue('');
+      setDoseUnit('mcg');
+      setDays([...DAY_ORDER]);
+      setTime('08:00');
+      setPrice('');
+      setExpiry(defaultExpiryISO());
+      setLot('');
+    }
+  }, [open, editing]);
 
   const mg = Number(vialMg);
   const bac = Number(bacMl);
   const doseMcg = doseValue === '' ? 0 : doseUnit === 'mg' ? Number(doseValue) * 1000 : Number(doseValue);
   const preview = mg > 0 && bac > 0 && doseMcg > 0 ? recon(mg, bac, doseMcg) : null;
+
+  // Live readout for the "amount left" field (edit mode).
+  const leftMcg = isEdit && mg > 0
+    ? Math.min(Math.max((amountLeft === '' ? 0 : Number(amountLeft)) * 1000, 0), mg * 1000)
+    : 0;
+  const leftDoses = doseMcg > 0 ? Math.floor(leftMcg / doseMcg) : 0;
+  const leftPct = mg > 0 ? Math.round((leftMcg / (mg * 1000)) * 100) : 0;
 
   function toggleDay(d: string) {
     setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
@@ -85,45 +125,68 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
     if (!(doseMcg > 0)) return setError('Enter a dose greater than zero.');
 
     const hour = parseInt((time || '08:00').split(':')[0] || '8', 10);
-    const sub: Substance = {
-      id: newId(),
+    const remaining = editing
+      ? leftMcg // clamped above
+      : mg * 1000; // new vial starts full
+
+    const base = {
       name: name.trim(),
       category: category.trim() || 'Peptide',
       sub: klass.trim() || category.trim() || 'Peptide',
       route,
-      hue: pickHue(app.substances.length),
       vialMg: mg,
       bacMl: bac,
       doseMcg,
       unit: doseUnit,
-      every: days.length >= 7 ? 'day' : days.length > 0 ? 'wk-days' : 'day',
+      every: (days.length >= 7 ? 'day' : days.length > 0 ? 'wk-days' : 'day') as Substance['every'],
       days: DAY_ORDER.filter((d) => days.includes(d)),
       time: time || '08:00',
-      period: hour < 12 ? 'AM' : 'PM',
-      remaining: mg * 1000,
+      period: (hour < 12 ? 'AM' : 'PM') as 'AM' | 'PM',
+      remaining,
       expiry: expiry || defaultExpiryISO(),
       pricePerVial: price === '' ? 0 : Math.max(0, Number(price)),
       lot: lot.trim(),
-      titration: null,
     };
-    app.addSubstance(sub);
+
+    if (editing) {
+      app.updateSubstance(editing.id, {
+        ...base,
+        id: editing.id,
+        hue: editing.hue,
+        titration: editing.titration,
+      });
+    } else {
+      app.addSubstance({
+        ...base,
+        id: newId(),
+        hue: pickHue(app.substances.length),
+        titration: null,
+      });
+    }
+    onClose();
+  }
+
+  function remove() {
+    if (!editing) return;
+    if (!confirm(`Delete ${editing.name}? This removes the vial and its dose history.`)) return;
+    app.deleteSubstance(editing.id);
     onClose();
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add a vial">
+    <Sheet open={open} onClose={onClose} title={isEdit ? 'Edit vial' : 'Add a vial'}>
       <form onSubmit={submit} style={{ padding: '16px 22px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Fld label="Peptide name">
           <input className="vlf" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BPC-157" />
         </Fld>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Category">
               <input className="vlf" style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Peptide" />
             </Fld>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Route">
               <select className="vlf" style={inputStyle} value={route} onChange={(e) => setRoute(e.target.value)}>
                 {ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -133,7 +196,7 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Amount in vial">
               <div style={{ position: 'relative' }}>
                 <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={vialMg} onChange={(e) => setVialMg(e.target.value)} placeholder="5" />
@@ -141,7 +204,7 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
               </div>
             </Fld>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="BAC water">
               <div style={{ position: 'relative' }}>
                 <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
@@ -160,6 +223,18 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
             </select>
           </div>
         </Fld>
+
+        {isEdit && (
+          <Fld label="Amount left in vial">
+            <div style={{ position: 'relative' }}>
+              <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={amountLeft} onChange={(e) => setAmountLeft(e.target.value)} placeholder="0" />
+              <span style={unitAdornment}>mg</span>
+            </div>
+            <div style={{ marginTop: 7, fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)' }}>
+              {leftDoses} doses · {leftPct}% full{mg > 0 && leftMcg >= mg * 1000 ? ' (full)' : ''}
+            </div>
+          </Fld>
+        )}
 
         {preview && (
           <div style={{ padding: '12px 14px', background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 14, fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>
@@ -188,12 +263,12 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
         </Fld>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Time">
               <input className="vlf" style={inputStyle} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
             </Fld>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Cost / vial">
               <div style={{ position: 'relative' }}>
                 <span style={{ ...unitAdornment, left: 13, right: 'auto' }}>$</span>
@@ -204,12 +279,12 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
         </div>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Expires / BUD">
               <input className="vlf" style={inputStyle} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
             </Fld>
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Lot (optional)">
               <input className="vlf" style={inputStyle} value={lot} onChange={(e) => setLot(e.target.value)} placeholder="—" />
             </Fld>
@@ -226,8 +301,18 @@ export function AddVialSheet({ open, onClose, app }: { open: boolean; onClose: (
           type="submit"
           style={{ width: '100%', padding: '15px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}
         >
-          <Icon.plus width={18} height={18} /> Add to inventory
+          {isEdit ? <Icon.check width={18} height={18} /> : <Icon.plus width={18} height={18} />} {isEdit ? 'Save changes' : 'Add to inventory'}
         </button>
+
+        {isEdit && (
+          <button
+            type="button"
+            onClick={remove}
+            style={{ width: '100%', padding: '11px 0', borderRadius: 14, border: '1px solid var(--line)', background: 'transparent', color: 'var(--red)', fontFamily: 'var(--mono)', fontSize: 12.5, cursor: 'pointer', marginBottom: 4 }}
+          >
+            Delete vial
+          </button>
+        )}
       </form>
     </Sheet>
   );

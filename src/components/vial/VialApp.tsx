@@ -16,6 +16,7 @@ import { DetailScreen } from './Detail';
 import { LogSheet } from './LogSheet';
 import { AddVialSheet } from './AddVialSheet';
 import { Login } from './Login';
+import { SetPassword } from './SetPassword';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -59,6 +60,12 @@ export function VialApp() {
   const { user, loading, configured } = useSession();
   const todayISO = todayLocalISO();
 
+  // True when the user arrives via a Supabase invite / password-reset link.
+  const [mustSetPw, setMustSetPw] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /type=(recovery|invite)/.test(window.location.href);
+  });
+
   const [subs, setSubs] = useState<Substance[]>([]);
   const [taken, setTaken] = useState<Set<string>>(new Set());
   const [dataLoading, setDataLoading] = useState(true);
@@ -68,7 +75,7 @@ export function VialApp() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; subId: string | null }>({ open: false, subId: null });
-  const [addOpen, setAddOpen] = useState(false);
+  const [vialSheet, setVialSheet] = useState<'new' | Substance | null>(null);
 
   const loadData = useCallback(async () => {
     const [s, logs] = await Promise.all([db.listSubstances(), db.listLogsForDate(todayISO)]);
@@ -101,6 +108,15 @@ export function VialApp() {
       cancelled = true;
     };
   }, [user, loadData]);
+
+  // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const { data: sub } = createClient().auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') setMustSetPw(true);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   async function applyTaken(subId: string, makeTaken: boolean) {
     const sub = subs.find((s) => s.id === subId);
@@ -154,7 +170,20 @@ export function VialApp() {
       const created = await db.createSubstance(sub);
       setSubs((prev) => [...prev, created]);
     },
-    openAddVial: () => setAddOpen(true),
+    openAddVial: () => setVialSheet('new'),
+    editVial: (sub) => setVialSheet(sub),
+    updateSubstance: async (id, s) => {
+      const updated = await db.updateSubstance(id, s);
+      setSubs((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    },
+    deleteSubstance: async (id) => {
+      await db.deleteSubstance(id);
+      setSubs((prev) => prev.filter((x) => x.id !== id));
+      if (detailId === id) {
+        setDetailId(null);
+        setClosing(false);
+      }
+    },
   };
 
   // ---- Gating ----
@@ -171,6 +200,7 @@ export function VialApp() {
     );
   }
 
+  if (mustSetPw) return <SetPassword onDone={() => setMustSetPw(false)} />;
   if (loading) return <div style={shell} aria-hidden />;
   if (!user) return <Login />;
   if (dataLoading) return <div style={shell} aria-hidden />;
@@ -183,7 +213,7 @@ export function VialApp() {
       <button
         onClick={signOut}
         aria-label="Sign out"
-        style={{ position: 'absolute', top: 14, right: 14, zIndex: 35, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 10px)', right: 'calc(env(safe-area-inset-right, 0px) + 14px)', zIndex: 35, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
       >
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
           <path d="M6 2H3.5A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -191,7 +221,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch' }}>
+      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -218,7 +248,7 @@ export function VialApp() {
       )}
 
       {/* bottom nav */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, paddingBottom: 26, paddingTop: 8, background: 'linear-gradient(rgba(16,13,10,0), var(--bg) 55%)' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, paddingBottom: 'max(26px, calc(env(safe-area-inset-bottom, 0px) + 12px))', paddingTop: 8, background: 'linear-gradient(rgba(16,13,10,0), var(--bg) 55%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', margin: '0 14px', padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 22, boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
@@ -235,7 +265,12 @@ export function VialApp() {
       </div>
 
       <LogSheet open={sheet.open} subId={sheet.subId} app={app} onClose={() => setSheet({ open: false, subId: null })} />
-      <AddVialSheet open={addOpen} onClose={() => setAddOpen(false)} app={app} />
+      <AddVialSheet
+        open={vialSheet !== null}
+        editing={vialSheet && vialSheet !== 'new' ? vialSheet : undefined}
+        onClose={() => setVialSheet(null)}
+        app={app}
+      />
     </div>
   );
 }

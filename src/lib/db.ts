@@ -102,6 +102,37 @@ export async function createSubstance(s: Substance): Promise<Substance> {
   return rowToSubstance(data as SubRow);
 }
 
+export async function updateSubstance(id: string, s: Substance): Promise<Substance> {
+  const row = {
+    name: s.name,
+    category: s.category,
+    sub: s.sub || null,
+    route: s.route,
+    hue: s.hue,
+    vial_mg: s.vialMg,
+    bac_ml: s.bacMl,
+    dose_mcg: s.doseMcg,
+    unit: s.unit,
+    every: s.every,
+    days: s.days,
+    time: s.time || null,
+    period: s.period,
+    remaining: s.remaining,
+    expiry: s.expiry || null,
+    price_per_vial: s.pricePerVial,
+    lot: s.lot || null,
+    titration: s.titration,
+  };
+  const { data, error } = await createClient()
+    .from('substances')
+    .update(row)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToSubstance(data as SubRow);
+}
+
 export async function updateRemaining(id: string, remaining: number): Promise<void> {
   const { error } = await createClient()
     .from('substances')

@@ -34,7 +34,15 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
       <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'linear-gradient(var(--bg), rgba(16,13,10,0.85))', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '54px 16px 10px' }}>
         <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Icon.back /></button>
         <Label>{s.category}</Label>
-        <div style={{ width: 38 }} />
+        <button
+          onClick={() => app.editVial(s)}
+          aria-label="Edit vial"
+          style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M11.5 2.5l2 2L6 12l-2.6.6.6-2.6 7.5-7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <div style={{ padding: '8px 20px 120px', flex: 1 }}>
@@ -106,7 +114,12 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
 
       <div style={{ position: 'sticky', bottom: 0, padding: '12px 20px 28px', background: 'linear-gradient(rgba(16,13,10,0), var(--bg) 40%)', display: 'flex', gap: 10 }}>
         <button onClick={() => app.log(s.id)} style={{ flex: 1, padding: '15px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icon.check /> Log dose</button>
-        <button style={{ width: 56, borderRadius: 16, border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}>Refill</button>
+        <button
+          onClick={() => { if (confirm(`Refill ${s.name} back to full (${s.vialMg} mg)?`)) app.updateSubstance(s.id, { ...s, remaining: s.vialMg * 1000 }); }}
+          style={{ width: 56, borderRadius: 16, border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}
+        >
+          Refill
+        </button>
       </div>
     </div>
   );
