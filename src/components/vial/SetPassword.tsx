@@ -35,6 +35,8 @@ export function SetPassword({ onDone }: { onDone: () => void }) {
       setBusy(false);
       return;
     }
+    // Drop the ?type=invite/recovery flag so a later reload doesn't re-open this screen.
+    if (typeof window !== 'undefined') window.history.replaceState({}, '', '/');
     onDone();
   }
 

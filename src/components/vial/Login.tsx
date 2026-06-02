@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { VialFill, Label } from './ui';
 
@@ -23,6 +23,16 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [linkExpired, setLinkExpired] = useState(false);
+
+  // An expired / invalid email link bounces back here with ?auth=expired (set by /auth/confirm).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('auth') === 'expired') {
+      setLinkExpired(true);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   async function signIn(e: React.FormEvent) {
     e.preventDefault();
@@ -75,6 +85,12 @@ export function Login() {
             Private peptide tracker
           </p>
         </div>
+
+        {linkExpired && (
+          <div style={{ padding: '11px 13px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 12, color: 'var(--red)', fontSize: 13, marginBottom: 14, lineHeight: 1.5 }}>
+            That link is invalid or has expired. Request a new one below.
+          </div>
+        )}
 
         {mode === 'signin' ? (
           <form onSubmit={signIn} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 22, padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
