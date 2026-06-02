@@ -26,7 +26,11 @@ export const metadata: Metadata = {
   description:
     "A minimalist tracker for peptides, supplements, and medications — calendar, inventory, and dosing calculator.",
   applicationName: "Vial",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Vial" },
+  // 'black' (opaque, like UpKeep's 'default' but dark for our theme) instead of
+  // 'black-translucent': translucent extended the web view UNDER the status bar and
+  // created an off-screen region at the bottom (confirmed via on-device test), which
+  // broke every bottom-bar attempt. Opaque keeps the viewport normal.
+  appleWebApp: { capable: true, statusBarStyle: "black", title: "Vial" },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

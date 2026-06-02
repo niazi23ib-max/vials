@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b26';
+const BUILD = 'b27';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -386,7 +386,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(92px + env(safe-area-inset-bottom))' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -413,17 +413,16 @@ export function VialApp() {
         </div>
       )}
 
-      {/* bottom nav — docked at the visible bottom (flexShrink:0). The shell is sized to
-          the visible viewport, so the bar reaches the real bottom edge; --navpad pads it
-          for the home-indicator safe area below the labels. */}
-      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 48px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.5)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
-          <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
-          <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
-          <NavBtn tab={TABS[2]} active={tab === 'progress'} onClick={() => setTab('progress')} />
-          <NavBtn tab={TABS[3]} active={tab === 'vials'} onClick={() => setTab('vials')} />
-          <NavBtn tab={TABS[4]} active={tab === 'calc'} onClick={() => setTab('calc')} />
-        </div>
+      {/* bottom nav — UpKeep-style FLOATING pill: position:fixed, offset from the bottom
+          by env(safe-area-inset-bottom) so it sits just above the home indicator with
+          content scrolling behind it. This is the exact technique the maintenance-tracker
+          app uses (it renders correctly on this device). z below the overlays/sheets. */}
+      <div id="vial-nav" style={{ position: 'fixed', left: 12, right: 12, bottom: 'calc(12px + env(safe-area-inset-bottom))', maxWidth: 416, margin: '0 auto', zIndex: 40, background: 'var(--surface-2)', border: '1px solid var(--line-strong)', borderRadius: 22, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', padding: '4px 2px' }}>
+        <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
+        <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
+        <NavBtn tab={TABS[2]} active={tab === 'progress'} onClick={() => setTab('progress')} />
+        <NavBtn tab={TABS[3]} active={tab === 'vials'} onClick={() => setTab('vials')} />
+        <NavBtn tab={TABS[4]} active={tab === 'calc'} onClick={() => setTab('calc')} />
       </div>
 
       <LogSheet open={sheet.open} subId={sheet.subId} app={app} onClose={() => setSheet({ open: false, subId: null })} />
