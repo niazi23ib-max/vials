@@ -324,15 +324,17 @@ export function VialApp() {
         </div>
       )}
 
-      {/* bottom nav */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, paddingBottom: 'max(26px, calc(env(safe-area-inset-bottom, 0px) + 12px))', paddingTop: 8, background: 'linear-gradient(rgba(16,13,10,0), var(--bg) 55%)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', margin: '0 14px', padding: '6px 10px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 22, boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+      {/* bottom nav — docked bar with a solid surface that fills to the screen
+          bottom (incl. the home-indicator safe area) so it reads as anchored,
+          not floating in a void. */}
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface)', borderTop: '1px solid var(--line-strong)', paddingTop: 6, paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.45)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
           <button
             onClick={app.openLog}
             aria-label="Log a dose"
-            style={{ width: 50, height: 50, margin: '0 4px', borderRadius: '50%', border: 'none', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)', marginTop: -18 }}
+            style={{ width: 52, height: 52, margin: '0 6px', borderRadius: '50%', border: '3px solid var(--surface)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)', marginTop: -22 }}
           >
             <Icon.plus />
           </button>
