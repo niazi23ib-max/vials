@@ -20,10 +20,6 @@ import { AddVialSheet } from './AddVialSheet';
 import { Login } from './Login';
 import { SetPassword } from './SetPassword';
 
-// Bump on each deploy — shown top-left so we can confirm the installed PWA is
-// actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b27';
-
 function todayLocalISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -98,7 +94,6 @@ export function VialApp() {
   const [closing, setClosing] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; subId: string | null }>({ open: false, subId: null });
   const [vialSheet, setVialSheet] = useState<'new' | Substance | null>(null);
-  const [diag, setDiag] = useState('');
 
   const loadData = useCallback(async () => {
     const since = new Date();
@@ -163,48 +158,6 @@ export function VialApp() {
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   }, []);
 
-  // Measure the device viewport and set --navpad: the bottom-nav padding that keeps
-  // its labels inside the VISIBLE viewport (innerHeight) while the shell's background
-  // still fills the full 100lvh physical screen. navpad = (100lvh − innerHeight) +
-  // safe-bottom + breathing. Re-runs when data loads (deps: dataLoading) and retries
-  // via rAF, because on a cold PWA launch the probes mount AFTER the first paint
-  // (that timing gap is why the earlier readout showed -1/na).
-  useEffect(() => {
-    const px = (id: string) => {
-      const el = document.getElementById(id);
-      return el ? Math.round(el.getBoundingClientRect().height) : -1;
-    };
-    const rect = (id: string) => {
-      const el = document.getElementById(id);
-      if (!el) return 'na';
-      const r = el.getBoundingClientRect();
-      return `${Math.round(r.top)}-${Math.round(r.bottom)}`;
-    };
-    const read = () => {
-      const ih = Math.round(window.innerHeight);
-      const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
-      const sab = px('p-sab');
-      const lvh = px('p-lvh');
-      // Shell is sized to the visible viewport (inset:0 == innerHeight == 894), so the
-      // nav docks at the real visible bottom. Pad only for the home-indicator safe area
-      // (+ breathing) below the labels — no phantom 956-overflow term needed.
-      const navpad = Math.max(sab, 0) + 14;
-      document.documentElement.style.setProperty('--navpad', `${navpad}px`);
-      setDiag(`ih${ih} lvh${lvh} svh${px('p-svh')} sab${sab} scr${scr} np${navpad} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
-    };
-    let tries = 0;
-    let raf = 0;
-    const tick = () => {
-      read();
-      if (++tries < 60 && document.getElementById('vial-nav') === null) raf = requestAnimationFrame(tick);
-    };
-    tick();
-    const t1 = setTimeout(read, 400);
-    const t2 = setTimeout(read, 1200);
-    window.addEventListener('resize', read);
-    window.visualViewport?.addEventListener('resize', read);
-    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); window.removeEventListener('resize', read); window.visualViewport?.removeEventListener('resize', read); };
-  }, [dataLoading]);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
   useEffect(() => {
@@ -364,16 +317,6 @@ export function VialApp() {
 
   return (
     <div id="vial-shell" style={shell}>
-      {/* Hidden probes to measure how this device resolves viewport units + safe areas. */}
-      <div id="p-svh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100svh', opacity: 0, pointerEvents: 'none' }} />
-      <div id="p-dvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100dvh', opacity: 0, pointerEvents: 'none' }} />
-      <div id="p-lvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100lvh', opacity: 0, pointerEvents: 'none' }} />
-      <div id="p-sab" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-bottom, 0px)', opacity: 0, pointerEvents: 'none' }} />
-      <div id="p-sat" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-top, 0px)', opacity: 0, pointerEvents: 'none' }} />
-      {/* TEMP build + viewport diagnostic readout (top-left). */}
-      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 4px)', left: 'calc(env(safe-area-inset-left, 0px) + 8px)', right: 'calc(env(safe-area-inset-right, 0px) + 48px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, lineHeight: 1.3, color: 'var(--amber)', pointerEvents: 'none' }}>
-        {BUILD} · {diag}
-      </div>
       {/* sign out */}
       <button
         onClick={signOut}
