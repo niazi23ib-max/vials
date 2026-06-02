@@ -85,7 +85,7 @@ export function TodayScreen({ app }: { app: AppApi }) {
   const expiring = app.substances.filter((s) => expiryStatus(s) === 'soon');
 
   return (
-    <div style={{ padding: '56px 20px 96px' }}>
+    <div style={{ padding: '56px 20px 116px' }}>
       <Label>{dateLabel}</Label>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 }}>
         <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 34, lineHeight: 1.02, color: 'var(--text)', margin: 0, whiteSpace: 'pre-line' }}>{greeting(now)}</h1>
