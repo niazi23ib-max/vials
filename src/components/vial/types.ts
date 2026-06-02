@@ -10,8 +10,9 @@ export interface AppApi {
   sites: Record<string, string>;
   /** Status of a dose on a given date, if logged. */
   statusOf: (subId: string, iso: string) => DoseStatus | undefined;
-  /** Set (or clear, with null) a dose's status on a given date — adjusts remaining + persists. */
-  setStatus: (subId: string, iso: string, status: DoseStatus | null, site?: string | null) => void;
+  /** Set (or clear, with null) a dose's status on a given date — adjusts remaining + persists.
+   *  `affectInventory` (default true) controls whether a "taken" dose pulls from the current vial. */
+  setStatus: (subId: string, iso: string, status: DoseStatus | null, site?: string | null, affectInventory?: boolean) => void;
   /** Most recent injection site logged for a substance (for rotation defaults). */
   lastSiteFor: (subId: string) => string | undefined;
   /** Toggle a today-event id (e.g. "reta-today"). */

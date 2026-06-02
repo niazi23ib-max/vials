@@ -69,6 +69,7 @@ export function VialApp() {
   const [subs, setSubs] = useState<Substance[]>([]);
   const [logs, setLogs] = useState<LogMap>({});
   const [sites, setSites] = useState<Record<string, string>>({});
+  const [consumedMap, setConsumedMap] = useState<Record<string, boolean>>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -85,13 +86,16 @@ export function VialApp() {
     setSubs(s);
     const map: LogMap = {};
     const siteMap: Record<string, string> = {};
+    const consMap: Record<string, boolean> = {};
     rows.forEach((l) => {
       const k = logKey(l.substance_id, l.scheduled_date);
       map[k] = l.status;
       if (l.site) siteMap[k] = l.site;
+      if (l.status === 'taken') consMap[k] = l.consumed !== false; // default true (legacy)
     });
     setLogs(map);
     setSites(siteMap);
+    setConsumedMap(consMap);
   }, []);
 
   useEffect(() => {
@@ -99,6 +103,7 @@ export function VialApp() {
       setSubs([]);
       setLogs({});
       setSites({});
+      setConsumedMap({});
       setDataLoading(false);
       return;
     }
@@ -135,7 +140,10 @@ export function VialApp() {
 
   // Set/clear a dose's status on any date. Only "taken" consumes from the vial,
   // so flipping taken⇄(skipped|cleared) restores or re-deducts one dose.
-  async function setStatus(subId: string, iso: string, status: DoseStatus | null, site?: string | null) {
+  // `affectInventory` controls whether a "taken" dose pulls from the current vial.
+  // Today's doses default to true; backfilled past doses can opt out. We remember
+  // per-log whether it consumed, so clearing it only restores when it actually did.
+  async function setStatus(subId: string, iso: string, status: DoseStatus | null, site?: string | null, affectInventory = true) {
     const sub = subs.find((s) => s.id === subId);
     if (!sub) return;
     const key = logKey(subId, iso);
@@ -145,10 +153,12 @@ export function VialApp() {
 
     const dec = doseDecrementOn(sub, iso);
     const wasTaken = prev === 'taken';
+    const wasConsumed = wasTaken && consumedMap[key] !== false;
     const willTake = status === 'taken';
+    const willConsume = willTake && affectInventory;
     let newRemaining = sub.remaining;
-    if (wasTaken && !willTake) newRemaining = Math.min(fullAmount(sub), sub.remaining + dec);
-    else if (!wasTaken && willTake) newRemaining = Math.max(0, sub.remaining - dec);
+    if (wasConsumed && !willConsume) newRemaining = Math.min(fullAmount(sub), sub.remaining + dec);
+    else if (!wasConsumed && willConsume) newRemaining = Math.max(0, sub.remaining - dec);
     const remainingChanged = newRemaining !== sub.remaining;
 
     // optimistic
@@ -164,11 +174,17 @@ export function VialApp() {
       else delete n[key];
       return n;
     });
+    setConsumedMap((prevMap) => {
+      const n = { ...prevMap };
+      if (willTake) n[key] = willConsume;
+      else delete n[key];
+      return n;
+    });
     if (remainingChanged) setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
 
     try {
       if (status === null) await db.deleteLog(subId, iso);
-      else await db.setLog(subId, iso, status, site);
+      else await db.setLog(subId, iso, status, site, willConsume);
       if (remainingChanged) await db.updateRemaining(subId, newRemaining);
     } catch {
       loadData(); // revert to server truth on failure

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { currentWeek, doseLabelOn, ok, todayName, isoDate, isDueOn, type Substance } from '@/lib/substances';
-import { Label, Monogram, Icon } from './ui';
+import { Label, Monogram, Icon, Sheet } from './ui';
 import type { AppApi } from './types';
 
 interface Ev { id: string; subId: string; name: string; hue: number; dose: string; time: string; period: string; route: string }
@@ -19,6 +19,7 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
   const TODAY_ISO = isoDate(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
   const [sel, setSel] = useState(TODAY_NAME);
+  const [backfill, setBackfill] = useState<{ subId: string; iso: string; name: string; label: string } | null>(null);
   const base = new Date();
   base.setDate(base.getDate() + weekOffset * 7);
   const WEEK = currentWeek(base);
@@ -119,7 +120,11 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
                 </button>
                 {!isFuture && (
                   <button
-                    onClick={() => app.setStatus(ev.subId, selObj.iso, isTaken ? null : 'taken')}
+                    onClick={() => {
+                      if (isTaken) app.setStatus(ev.subId, selObj.iso, null);
+                      else if (selObj.iso === TODAY_ISO) app.setStatus(ev.subId, selObj.iso, 'taken');
+                      else setBackfill({ subId: ev.subId, iso: selObj.iso, name: ev.name, label: `${selObj.mo} ${selObj.d}` });
+                    }}
                     aria-label={isTaken ? 'Mark not taken' : 'Mark taken'}
                     style={{ alignSelf: 'center', marginLeft: 8, width: 30, height: 30, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', border: isTaken ? 'none' : '1.5px solid var(--line-strong)', background: isTaken ? 'var(--green)' : 'transparent', color: isTaken ? 'var(--bg)' : 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
                   >
@@ -131,6 +136,31 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
           })
         )}
       </div>
+
+      <Sheet open={backfill !== null} onClose={() => setBackfill(null)} title="Log past dose">
+        {backfill && (
+          <div style={{ padding: '14px 22px 0' }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+              Mark <span style={{ color: 'var(--text)' }}>{backfill.name}</span> as taken on <span style={{ color: 'var(--text)' }}>{backfill.label}</span>. Should it come out of your current inventory?
+            </div>
+            <button
+              onClick={() => { app.setStatus(backfill.subId, backfill.iso, 'taken', undefined, true); setBackfill(null); }}
+              style={{ width: '100%', marginTop: 16, padding: '14px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Log &amp; subtract from inventory
+            </button>
+            <button
+              onClick={() => { app.setStatus(backfill.subId, backfill.iso, 'taken', undefined, false); setBackfill(null); }}
+              style={{ width: '100%', marginTop: 10, padding: '13px 0', borderRadius: 16, border: '1px solid var(--line-strong)', background: 'transparent', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 12.5, cursor: 'pointer' }}
+            >
+              Log only — keep inventory
+            </button>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', padding: '12px 0 0', lineHeight: 1.5 }}>
+              Use “keep inventory” when the dose came from a different/older vial.
+            </div>
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }

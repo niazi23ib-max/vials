@@ -164,13 +164,14 @@ export interface DoseLogRow {
   scheduled_date: string;
   status: 'taken' | 'skipped';
   site: string | null;
+  consumed: boolean | null;
 }
 
 /** All of the user's dose logs on or after `sinceISO` (for history, the week view, and stats). */
 export async function listLogs(sinceISO: string): Promise<DoseLogRow[]> {
   const { data, error } = await createClient()
     .from('dose_logs')
-    .select('id,substance_id,scheduled_date,status,site')
+    .select('id,substance_id,scheduled_date,status,site,consumed')
     .gte('scheduled_date', sinceISO)
     .order('scheduled_date', { ascending: false });
   if (error) throw error;
@@ -182,6 +183,7 @@ export async function setLog(
   dateISO: string,
   status: 'taken' | 'skipped',
   site?: string | null,
+  consumed = true,
 ): Promise<void> {
   const user_id = await uid();
   const { error } = await createClient()
@@ -193,6 +195,7 @@ export async function setLog(
         scheduled_date: dateISO,
         status,
         site: status === 'taken' ? site ?? null : null,
+        consumed: status === 'taken' ? consumed : true,
         taken_at: status === 'taken' ? new Date().toISOString() : null,
       },
       { onConflict: 'substance_id,scheduled_date' },
