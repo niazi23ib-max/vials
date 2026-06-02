@@ -420,43 +420,37 @@ export function AddVialSheet({
             </div>
           </Fld>
         ) : (
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Fld label="Start date">
-                <input className="vlf" style={inputStyle} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              </Fld>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Fld label="Course (wks)">
-                <div style={{ position: 'relative' }}>
-                  <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="0" value={courseWeeks} onChange={(e) => setCourseWeeks(e.target.value)} placeholder="Ongoing" />
-                  <span style={adorn}>wks</span>
-                </div>
-              </Fld>
-            </div>
-          </div>
+          <>
+            {/* Native date picker gets its own row — on iOS it renders wider than a half column and would overlap a neighbor. */}
+            <Fld label="Start date">
+              <input className="vlf" style={inputStyle} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </Fld>
+            <Fld label="Course length (optional)">
+              <div style={{ position: 'relative' }}>
+                <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="0" value={courseWeeks} onChange={(e) => setCourseWeeks(e.target.value)} placeholder="Ongoing" />
+                <span style={adorn}>wks</span>
+              </div>
+            </Fld>
+          </>
         )}
 
+        {/* Native time/date pickers each get a full-width row — on iOS they render
+            wider than a half column and overlap the field beside them. */}
+        <Fld label="Time">
+          <input className="vlf" style={inputStyle} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        </Fld>
+
+        <Fld label="Expires / BUD">
+          <input className="vlf" style={inputStyle} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+        </Fld>
+
         <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Fld label="Time">
-              <input className="vlf" style={inputStyle} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-            </Fld>
-          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Fld label="Cost / container">
               <div style={{ position: 'relative' }}>
                 <span style={{ ...adorn, left: 13, right: 'auto' }}>$</span>
                 <input className="vlf" style={{ ...inputStyle, paddingLeft: 26 }} type="number" inputMode="decimal" step="any" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
               </div>
-            </Fld>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <Fld label="Expires / BUD">
-              <input className="vlf" style={inputStyle} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
             </Fld>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>

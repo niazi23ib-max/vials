@@ -53,11 +53,13 @@ const shell: React.CSSProperties = {
   // the bottom edge in both Safari and the installed PWA.
   position: 'fixed',
   top: 0,
-  bottom: 0,
   left: 0,
   right: 0,
   width: '100%',
   maxWidth: 440,
+  // Exact visible height measured in JS (--app-h), with a dvh fallback for the
+  // first paint. Guarantees the shell fills the screen so the nav reaches the bottom.
+  height: 'var(--app-h, 100dvh)',
   margin: '0 auto',
   overflow: 'hidden',
   background: 'var(--bg)',
@@ -135,6 +137,18 @@ export function VialApp() {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {});
     }
+  }, []);
+
+  // Pin the shell to the exact visible viewport height (iOS-reliable).
+  useEffect(() => {
+    const setH = () => document.documentElement.style.setProperty('--app-h', `${window.innerHeight}px`);
+    setH();
+    window.addEventListener('resize', setH);
+    window.addEventListener('orientationchange', setH);
+    return () => {
+      window.removeEventListener('resize', setH);
+      window.removeEventListener('orientationchange', setH);
+    };
   }, []);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.

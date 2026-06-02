@@ -37,6 +37,24 @@ self.addEventListener('notificationclick', function (event) {
   );
 });
 
+// Network-first for page navigations so a reopened (installed) PWA always loads
+// the latest build instead of a cached app shell.
+self.addEventListener('fetch', function (event) {
+  const req = event.request;
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          return await fetch(req);
+        } catch {
+          const cached = await caches.match(req);
+          return cached || Response.error();
+        }
+      })(),
+    );
+  }
+});
+
 // Activate immediately on update.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
