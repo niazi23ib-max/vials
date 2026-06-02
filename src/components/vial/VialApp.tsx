@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b23';
+const BUILD = 'b24';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -393,7 +393,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--navpad, 108px) + 48px)' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -420,10 +420,11 @@ export function VialApp() {
         </div>
       )}
 
-      {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
-          flex-column shell. Its background fills the home-indicator safe area via
-          padding-bottom: env(safe-area-inset-bottom). */}
-      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 108px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      {/* bottom nav — a FLOATING translucent bar pinned over the bottom (position:absolute).
+          The scroll area fills the whole shell and scrolls behind it, so content reaches the
+          bottom edge (UpKeep-style). --navpad keeps the labels above the home indicator;
+          the backdrop blur lets content show through behind the bar. */}
+      <div id="vial-nav" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'rgba(22,18,14,0.72)', backdropFilter: 'saturate(160%) blur(22px)', WebkitBackdropFilter: 'saturate(160%) blur(22px)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 108px)', boxShadow: '0 -8px 24px rgba(0,0,0,0.3)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
