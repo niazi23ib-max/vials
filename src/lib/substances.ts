@@ -373,6 +373,46 @@ export function recon(vialMg: number, bacMl: number, doseMcg: number): Recon {
   return { totMcg, concMcgPerMl, mcgPerUnit, units, mlDraw, dosesPerVial };
 }
 
+/** Units to draw on a U-100 syringe for this substance's (date-correct) dose.
+ *  0 when it isn't an injectable or isn't reconstituted yet (no BAC water / mg) —
+ *  guards the /0 → Infinity case. */
+export function drawUnits(s: Substance, iso: string): number {
+  if (formOf(s.route) !== 'inject' || s.bacMl <= 0 || s.vialMg <= 0) return 0;
+  return recon(s.vialMg, s.bacMl, effectiveDoseMcg(s, iso)).units;
+}
+
+export interface ReconSuggestion {
+  bacMl: number;
+  units: number;
+  mlDraw: number;
+  round: boolean; // the draw lands on a whole-unit mark
+}
+/** Suggest BAC-water volumes (clean 0.5 mL steps) that make each `doseMcg` dose land on
+ *  a readable mark on a U-100 syringe. Best first; [] when no option fits a 1 mL syringe. */
+export function suggestReconOptions(vialMg: number, doseMcg: number): ReconSuggestion[] {
+  if (vialMg <= 0 || doseMcg <= 0) return [];
+  const cands: { bacMl: number; units: number; score: number }[] = [];
+  for (let q = 1; q <= 10; q++) {              // BAC water 0.5–5.0 mL in 0.5 steps
+    const bacMl = q * 0.5;
+    const units = (doseMcg * bacMl) / (vialMg * 10);
+    if (units < 4 || units > 100) continue;    // must fit a 1 mL syringe and stay readable
+    const ru = Math.round(units);
+    const frac = Math.abs(units - ru);
+    let score = 0;
+    if (frac < 0.04) score += 4; else if (frac < 0.1) score += 1;
+    if (frac < 0.1) { if (ru % 10 === 0) score += 3; else if (ru % 5 === 0) score += 2; else if (ru % 2 === 0) score += 1; }
+    if (units >= 15 && units <= 60) score += 3; else if (units >= 10 && units <= 80) score += 1;
+    cands.push({ bacMl, units, score });
+  }
+  cands.sort((a, b) => b.score - a.score || Math.abs(a.units - 35) - Math.abs(b.units - 35));
+  return cands.slice(0, 3).map((c) => ({
+    bacMl: c.bacMl,
+    units: c.units,
+    mlDraw: c.units / 100,
+    round: Math.abs(c.units - Math.round(c.units)) < 0.04,
+  }));
+}
+
 /** Dose label for lists: "250 mcg", "4 mg", or "1 cap · 500 mg". */
 export function doseLabel(s: Substance): string {
   if (formOf(s.route) === 'oral') {

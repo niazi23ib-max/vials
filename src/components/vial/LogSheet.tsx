@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import {
-  doseLabelOn, recon, fillPct, substanceForm, effectiveDoseMcg, isoDate,
+  doseLabelOn, drawUnits, fillPct, substanceForm, isoDate,
   INJECTION_SITES, nextSite,
 } from '@/lib/substances';
-import { Sheet, Monogram, Label, Icon, VialFill } from './ui';
+import { Sheet, Monogram, Label, Icon, VialFill, Syringe } from './ui';
 import type { AppApi } from './types';
 
 export function LogSheet({
@@ -29,6 +29,7 @@ export function LogSheet({
 
   const s = app.substances.find((x) => x.id === chosen);
   const isInject = s ? substanceForm(s) === 'inject' : false;
+  const units = s ? drawUnits(s, todayISO) : 0;
 
   // Default the injection site to the next one in rotation.
   useEffect(() => {
@@ -63,10 +64,23 @@ export function LogSheet({
               <VialFill pct={fillPct(s)} hue={s.hue} w={32} h={78} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--text)' }}>{s.name}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{doseLabelOn(s, todayISO)}{isInject ? ` · ${recon(s.vialMg, s.bacMl, effectiveDoseMcg(s, todayISO)).units.toFixed(1)} units` : ''}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{doseLabelOn(s, todayISO)}{isInject && units > 0 ? ` · ${units.toFixed(1)} units` : ''}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Today · {s.time} {s.period} · {s.route}</div>
               </div>
             </div>
+
+            {isInject && units > 0 && (
+              <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <Label color="var(--amber)">Draw to</Label>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontFamily: 'var(--serif)', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{units.toFixed(1)}</span>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)' }}>units</span>
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}><Syringe units={units} /></div>
+              </div>
+            )}
 
             {isInject && (
               <div style={{ marginBottom: 16 }}>

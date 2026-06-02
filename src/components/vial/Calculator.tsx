@@ -1,36 +1,9 @@
 'use client';
 
 import { memo, useMemo, useState, type CSSProperties } from 'react';
-import { recon, substanceForm, isoDate, type Substance } from '@/lib/substances';
-import { Label, Chip } from './ui';
+import { recon, suggestReconOptions, substanceForm, isoDate, type Substance } from '@/lib/substances';
+import { Label, Chip, Syringe } from './ui';
 import type { AppApi } from './types';
-
-function Syringe({ units }: { units: number }) {
-  const capped = Math.min(units, 100);
-  const pct = (capped / 100) * 100;
-  const over = units > 100;
-  return (
-    <div style={{ padding: '4px 2px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <div style={{ width: 16, height: 12, background: 'var(--line-strong)', borderRadius: '3px 0 0 3px' }} />
-        <div style={{ width: 4, height: 22, background: 'var(--line-strong)' }} />
-        <div style={{ position: 'relative', flex: 1, height: 34, background: 'rgba(255,255,255,0.025)', border: '1.5px solid var(--line-strong)', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: pct + '%', background: 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))', transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
-          {[10, 20, 30, 40, 50, 60, 70, 80, 90].map((t) => (
-            <div key={t} style={{ position: 'absolute', left: t + '%', top: t % 50 === 0 ? 0 : 6, bottom: 0, width: 1, background: 'var(--line)' }} />
-          ))}
-          <div style={{ position: 'absolute', left: `calc(${pct}% - 1px)`, top: -2, bottom: -2, width: 2, background: 'var(--text)' }} />
-        </div>
-        <div style={{ width: 5, height: 8, background: 'var(--line-strong)' }} />
-        <div style={{ width: 22, height: 1.5, background: 'var(--line-strong)' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, padding: '0 28px 0 22px' }}>
-        {[0, 25, 50, 75, 100].map((t) => <span key={t} style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-faint)' }}>{t}</span>)}
-      </div>
-      {over && <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--amber)', marginTop: 6 }}>Exceeds 1 mL — split across two draws or add more BAC water.</div>}
-    </div>
-  );
-}
 
 function Stepper({ label, value, unit, step, min, max, fmt, onChange }: { label: string; value: number; unit: string; step: number; min: number; max: number; fmt?: (v: number) => string; onChange: (v: number) => void }) {
   const btn = (txt: string, fn: () => void) => (
@@ -67,6 +40,8 @@ function ReconTab({ substances }: { substances: Substance[] }) {
   const r = recon(mg, bac, dose);
   const doseFmt = dose >= 1000 ? dose / 1000 + ' mg' : dose + ' mcg';
   const injectables = useMemo(() => substances.filter((s) => substanceForm(s) === 'inject'), [substances]);
+  const suggestions = useMemo(() => suggestReconOptions(mg, dose), [mg, dose]);
+  const best = suggestions[0];
 
   return (
     <div>
@@ -85,6 +60,27 @@ function ReconTab({ substances }: { substances: Substance[] }) {
         </div>
         <div style={{ marginTop: 14 }}><Syringe units={r.units} /></div>
       </div>
+
+      {best && (
+        <div style={{ margin: '14px 20px 0', padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            <Label color="var(--amber)">✦ Suggested mix</Label>
+            <button onClick={() => setBac(best.bacMl)} style={{ background: 'var(--amber)', color: 'var(--bg)', border: 'none', borderRadius: 999, padding: '5px 12px', fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>Use {best.bacMl} mL</button>
+          </div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
+            Add <span style={{ color: 'var(--text)' }}>{best.bacMl} mL</span> BAC water → each dose draws to <span style={{ color: 'var(--text)' }}>{best.round ? best.units.toFixed(0) : best.units.toFixed(1)} units</span>{best.round ? ' (clean mark)' : ''}.
+          </div>
+          {suggestions.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+              {suggestions.slice(1).map((o) => (
+                <button key={o.bacMl} onClick={() => setBac(o.bacMl)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--line)', borderRadius: 999, padding: '5px 10px', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-dim)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                  {o.bacMl} mL → {o.round ? o.units.toFixed(0) : o.units.toFixed(1)}u
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ padding: '22px 20px 0' }}>
         <Label>Vial setup</Label>

@@ -52,6 +52,39 @@ export function VialFill({
   );
 }
 
+/* ── Syringe draw guide (U-100; auto-picks the smallest readable syringe size) ─ */
+export function Syringe({ units, cap }: { units: number; cap?: number }) {
+  const capped = cap ?? ([30, 50, 100].find((c) => units <= c) ?? 100);
+  const over = units > capped;
+  const pct = Math.min(Math.max(units, 0) / capped, 1) * 100;
+  const step = capped <= 50 ? 10 : 25;
+  const labels: number[] = [];
+  for (let v = 0; v <= capped + 1e-6; v += step) labels.push(Math.round(v));
+  return (
+    <div style={{ padding: '4px 2px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ width: 16, height: 12, background: 'var(--line-strong)', borderRadius: '3px 0 0 3px' }} />
+        <div style={{ width: 4, height: 22, background: 'var(--line-strong)' }} />
+        <div style={{ position: 'relative', flex: 1, height: 34, background: 'rgba(255,255,255,0.025)', border: '1.5px solid var(--line-strong)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: pct + '%', background: 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))', transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
+          {labels.slice(1, -1).map((v) => (
+            <div key={v} style={{ position: 'absolute', left: (v / capped) * 100 + '%', top: 6, bottom: 0, width: 1, background: 'var(--line)' }} />
+          ))}
+          <div style={{ position: 'absolute', left: `calc(${pct}% - 1px)`, top: -2, bottom: -2, width: 2, background: 'var(--text)' }} />
+        </div>
+        <div style={{ width: 5, height: 8, background: 'var(--line-strong)' }} />
+        <div style={{ width: 22, height: 1.5, background: 'var(--line-strong)' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, padding: '0 28px 0 22px' }}>
+        {labels.map((v) => <span key={v} style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-faint)' }}>{v}</span>)}
+      </div>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: over ? 'var(--amber)' : 'var(--text-faint)', marginTop: 5, lineHeight: 1.4 }}>
+        {over ? 'Exceeds the syringe — split the draw or add more BAC water.' : `U-100 · ${capped}-unit syringe`}
+      </div>
+    </div>
+  );
+}
+
 /* ── Monogram chip ───────────────────────────────────────────── */
 export function Monogram({ name, hue, size = 38 }: { name: string; hue: number; size?: number }) {
   return (
