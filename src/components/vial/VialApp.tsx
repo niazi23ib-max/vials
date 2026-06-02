@@ -132,11 +132,22 @@ export function VialApp() {
     };
   }, [user, loadData]);
 
-  // Register the service worker (enables install + push notifications).
+  // Register the service worker (enables install + push notifications) and
+  // auto-reload once when a new version takes control, so an installed PWA
+  // never stays stuck on a cached older build after a deploy.
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {});
-    }
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloaded = false;
+    const onControllerChange = () => {
+      if (!reloaded && hadController) { reloaded = true; window.location.reload(); }
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/', updateViaCache: 'none' })
+      .then((reg) => reg.update())
+      .catch(() => {});
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   }, []);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
@@ -329,7 +340,7 @@ export function VialApp() {
       {/* bottom nav — docked bar with a solid surface that fills to the screen
           bottom (incl. the home-indicator safe area) so it reads as anchored,
           not floating in a void. */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(30px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, width: '100%', maxWidth: 440, margin: '0 auto', zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(30px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
