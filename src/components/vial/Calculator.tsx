@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 import { recon, substanceForm, isoDate, type Substance } from '@/lib/substances';
 import { Label, Chip } from './ui';
 import type { AppApi } from './types';
@@ -66,12 +66,13 @@ function ReconTab({ substances }: { substances: Substance[] }) {
   const [dose, setDose] = useState(4000);
   const r = recon(mg, bac, dose);
   const doseFmt = dose >= 1000 ? dose / 1000 + ' mg' : dose + ' mcg';
+  const injectables = useMemo(() => substances.filter((s) => substanceForm(s) === 'inject'), [substances]);
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, padding: '4px 20px 0', overflowX: 'auto' }}>
         <Label style={{ alignSelf: 'center', flexShrink: 0 }}>Load</Label>
-        {substances.filter((s) => substanceForm(s) === 'inject').map((s) => (
+        {injectables.map((s) => (
           <Chip key={s.id} onClick={() => { setMg(s.vialMg); setBac(s.bacMl); setDose(s.doseMcg); }}>{s.name}</Chip>
         ))}
       </div>
@@ -263,7 +264,7 @@ function TitrationTab({ app }: { app: AppApi }) {
   );
 }
 
-export function CalculatorScreen({ app }: { app: AppApi }) {
+export const CalculatorScreen = memo(function CalculatorScreen({ app }: { app: AppApi }) {
   const [tab, setTab] = useState<'recon' | 'titration'>('recon');
   return (
     <div style={{ paddingTop: 56, paddingBottom: 28 }}>
@@ -287,4 +288,4 @@ export function CalculatorScreen({ app }: { app: AppApi }) {
       </div>
     </div>
   );
-}
+});

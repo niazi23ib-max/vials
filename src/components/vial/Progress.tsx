@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { isoDate, ok } from '@/lib/substances';
 import {
   weightSeries, weightSummary, fmtNum, getWeightUnit, setWeightUnit,
@@ -173,7 +173,7 @@ function StatCell({ value, label, tone }: { value: string; label: string; tone?:
   );
 }
 
-export function ProgressScreen({ app }: { app: AppApi }) {
+export const ProgressScreen = memo(function ProgressScreen({ app }: { app: AppApi }) {
   const [sheet, setSheet] = useState(false);
   const [editing, setEditing] = useState<BodyMetric | null>(null);
   const [unit, setUnit] = useState<WeightUnit>('lb');
@@ -183,8 +183,8 @@ export function ProgressScreen({ app }: { app: AppApi }) {
   const series = useMemo(() => weightSeries(metrics), [metrics]);
   const summary = useMemo(() => weightSummary(metrics), [metrics]);
   const recent = useMemo(() => [...metrics].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8), [metrics]);
-  const latestWaist = [...metrics].reverse().find((m) => m.waist != null)?.waist;
-  const latestFat = [...metrics].reverse().find((m) => m.bodyFat != null)?.bodyFat;
+  const latestWaist = useMemo(() => [...metrics].reverse().find((m) => m.waist != null)?.waist, [metrics]);
+  const latestFat = useMemo(() => [...metrics].reverse().find((m) => m.bodyFat != null)?.bodyFat, [metrics]);
 
   function openNew() { setEditing(null); setSheet(true); }
   function openEdit(m: BodyMetric) { setEditing(m); setSheet(true); }
@@ -268,4 +268,4 @@ export function ProgressScreen({ app }: { app: AppApi }) {
       <MetricSheet open={sheet} onClose={() => setSheet(false)} app={app} unit={unit} editing={editing} />
     </div>
   );
-}
+});

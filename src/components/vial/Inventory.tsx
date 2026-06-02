@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, daysUntil, fmtMoney, containerLabel, type Substance,
 } from '@/lib/substances';
@@ -16,11 +16,12 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
   );
 }
 
-function VialCard({ s, onOpen }: { s: Substance; onOpen: (id: string) => void }) {
+const VialCard = memo(function VialCard({ s, onOpen }: { s: Substance; onOpen: (id: string) => void }) {
   const stock = stockStatus(s);
   const exp = expiryStatus(s);
   const dl = daysLeft(s);
-  const remValue = Math.round(s.pricePerVial * fillPct(s));
+  const pct = fillPct(s);
+  const remValue = Math.round(s.pricePerVial * pct);
   const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
 
   return (
@@ -29,8 +30,8 @@ function VialCard({ s, onOpen }: { s: Substance; onOpen: (id: string) => void })
       style={{ width: '100%', textAlign: 'left', cursor: 'pointer', padding: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 20, display: 'flex', gap: 16 }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <VialFill pct={fillPct(s)} hue={s.hue} w={32} h={84} />
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: runwayTone }}>{Math.round(fillPct(s) * 100)}%</span>
+        <VialFill pct={pct} hue={s.hue} w={32} h={84} />
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: runwayTone }}>{Math.round(pct * 100)}%</span>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -52,20 +53,22 @@ function VialCard({ s, onOpen }: { s: Substance; onOpen: (id: string) => void })
       </div>
     </button>
   );
-}
+});
 
-export function InventoryScreen({ app }: { app: AppApi }) {
+export const InventoryScreen = memo(function InventoryScreen({ app }: { app: AppApi }) {
   const [filter, setFilter] = useState<'All' | 'Low' | 'Expiring'>('All');
 
-  const filtered = app.substances.filter((s) => {
+  const filtered = useMemo(() => app.substances.filter((s) => {
     if (filter === 'Low') return stockStatus(s) !== 'ok';
     if (filter === 'Expiring') return expiryStatus(s) === 'soon';
     return true;
-  });
+  }), [app.substances, filter]);
 
-  const totalValue = app.substances.reduce((n, s) => n + Math.round(s.pricePerVial * fillPct(s)), 0);
-  const lowCount = app.substances.filter((s) => stockStatus(s) !== 'ok').length;
-  const expCount = app.substances.filter((s) => expiryStatus(s) === 'soon').length;
+  const { totalValue, lowCount, expCount } = useMemo(() => ({
+    totalValue: app.substances.reduce((n, s) => n + Math.round(s.pricePerVial * fillPct(s)), 0),
+    lowCount: app.substances.filter((s) => stockStatus(s) !== 'ok').length,
+    expCount: app.substances.filter((s) => expiryStatus(s) === 'soon').length,
+  }), [app.substances]);
 
   const summary: { l: string; v: string | number; tone: string }[] = [
     { l: 'On hand', v: fmtMoney(totalValue), tone: 'var(--text)' },
@@ -109,4 +112,4 @@ export function InventoryScreen({ app }: { app: AppApi }) {
       </div>
     </div>
   );
-}
+});

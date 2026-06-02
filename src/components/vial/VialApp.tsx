@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { doseDecrementOn, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
 import type { BodyMetric } from '@/lib/metrics';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
@@ -12,13 +13,18 @@ import type { AppApi } from './types';
 import { TodayScreen } from './Today';
 import { ScheduleScreen } from './Schedule';
 import { InventoryScreen } from './Inventory';
-import { CalculatorScreen } from './Calculator';
-import { ProgressScreen } from './Progress';
 import { DetailScreen } from './Detail';
 import { LogSheet } from './LogSheet';
 import { AddVialSheet } from './AddVialSheet';
 import { Login } from './Login';
 import { SetPassword } from './SetPassword';
+
+// Code-split the two least-frequently-opened tabs (Progress, Calc) out of the
+// initial bundle — their chunks load on first visit, then stay cached. The hot
+// tabs (Today/Schedule/Vials) + Detail stay eager for instant switching.
+const ScreenFallback = () => <div style={{ minHeight: 240 }} aria-hidden />;
+const ProgressScreen = dynamic(() => import('./Progress').then((m) => m.ProgressScreen), { ssr: false, loading: ScreenFallback });
+const CalculatorScreen = dynamic(() => import('./Calculator').then((m) => m.CalculatorScreen), { ssr: false, loading: ScreenFallback });
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -173,7 +179,7 @@ export function VialApp() {
   // `affectInventory` controls whether a "taken" dose pulls from the current vial.
   // Today's doses default to true; backfilled past doses can opt out. We remember
   // per-log whether it consumed, so clearing it only restores when it actually did.
-  async function setStatus(subId: string, iso: string, status: DoseStatus | null, site?: string | null, affectInventory = true) {
+  const setStatus = useCallback(async (subId: string, iso: string, status: DoseStatus | null, site?: string | null, affectInventory = true) => {
     const sub = subs.find((s) => s.id === subId);
     if (!sub) return;
     const key = logKey(subId, iso);
@@ -219,26 +225,31 @@ export function VialApp() {
     } catch {
       loadData(); // revert to server truth on failure
     }
-  }
+  }, [subs, logs, sites, consumedMap, loadData]);
 
-  function back() {
+  const back = useCallback(() => {
     setClosing(true);
     setTimeout(() => {
       setDetailId(null);
       setClosing(false);
     }, 300);
-  }
+  }, []);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     await createClient().auth.signOut();
-  }
+  }, []);
 
-  const statusOf = (subId: string, iso: string) => logs[logKey(subId, iso)];
-  const takenToday = new Set<string>();
-  for (const sub of subs) {
-    if (statusOf(sub.id, todayISO) === 'taken') takenToday.add(sub.id + '-today');
-  }
-  const lastSiteFor = (subId: string): string | undefined => {
+  const statusOf = useCallback((subId: string, iso: string) => logs[logKey(subId, iso)], [logs]);
+
+  const takenToday = useMemo(() => {
+    const set = new Set<string>();
+    for (const sub of subs) {
+      if (logs[logKey(sub.id, todayISO)] === 'taken') set.add(sub.id + '-today');
+    }
+    return set;
+  }, [subs, logs, todayISO]);
+
+  const lastSiteFor = useCallback((subId: string): string | undefined => {
     let bestIso = '';
     let best: string | undefined;
     for (const [k, v] of Object.entries(sites)) {
@@ -246,9 +257,49 @@ export function VialApp() {
       if (k.slice(0, bar) === subId && k.slice(bar + 1) > bestIso) { bestIso = k.slice(bar + 1); best = v; }
     }
     return best;
-  };
+  }, [sites]);
 
-  const app: AppApi = {
+  const toggle = useCallback((eid: string) => {
+    const subId = eid.replace('-today', '');
+    setStatus(subId, todayISO, statusOf(subId, todayISO) === 'taken' ? null : 'taken');
+  }, [setStatus, statusOf, todayISO]);
+  const open = useCallback((subId: string) => setDetailId(subId), []);
+  const log = useCallback((subId?: string) => setSheet({ open: true, subId: subId ?? null }), []);
+  const openLog = useCallback(() => setSheet({ open: true, subId: null }), []);
+  const confirmLog = useCallback((subId: string, site?: string | null) => setStatus(subId, todayISO, 'taken', site), [setStatus, todayISO]);
+  const skipLog = useCallback((subId?: string) => { if (subId) setStatus(subId, todayISO, 'skipped'); }, [setStatus, todayISO]);
+  const addSubstance = useCallback(async (sub: Substance) => {
+    const created = await db.createSubstance(sub);
+    setSubs((prev) => [...prev, created]);
+  }, []);
+  const openAddVial = useCallback(() => setVialSheet('new'), []);
+  const editVial = useCallback((sub: Substance) => setVialSheet(sub), []);
+  const updateSubstance = useCallback(async (id: string, s: Substance) => {
+    const updated = await db.updateSubstance(id, s);
+    setSubs((prev) => prev.map((x) => (x.id === id ? updated : x)));
+  }, []);
+  const deleteSubstance = useCallback(async (id: string) => {
+    await db.deleteSubstance(id);
+    setSubs((prev) => prev.filter((x) => x.id !== id));
+    // If the deleted vial's detail is open, close it (functional update keeps this
+    // callback stable — no detailId dependency).
+    setDetailId((cur) => (cur === id ? null : cur));
+    setClosing(false);
+  }, []);
+  const saveMetric = useCallback(async (date: string, fields: { weight: number | null; waist: number | null; bodyFat: number | null; note: string }) => {
+    const saved = await db.upsertMetric(date, fields);
+    setMetrics((prev) => [...prev.filter((m) => m.date !== date), saved].sort((a, b) => a.date.localeCompare(b.date)));
+  }, []);
+  const removeMetric = useCallback(async (date: string) => {
+    await db.deleteMetric(date);
+    setMetrics((prev) => prev.filter((m) => m.date !== date));
+  }, []);
+
+  // Memoize the shared controller so it only changes identity when the underlying
+  // DATA changes (subs/logs/sites/metrics), not on UI-only state (tab, open sheet,
+  // detail). All callbacks are stable via useCallback, so screens wrapped in
+  // React.memo skip re-rendering on unrelated interactions.
+  const app: AppApi = useMemo(() => ({
     substances: subs,
     taken: takenToday,
     logs,
@@ -256,43 +307,21 @@ export function VialApp() {
     statusOf,
     setStatus,
     lastSiteFor,
-    toggle: (eid) => {
-      const subId = eid.replace('-today', '');
-      setStatus(subId, todayISO, statusOf(subId, todayISO) === 'taken' ? null : 'taken');
-    },
-    open: (subId) => setDetailId(subId),
-    log: (subId) => setSheet({ open: true, subId: subId ?? null }),
-    openLog: () => setSheet({ open: true, subId: null }),
-    confirmLog: (subId, site) => setStatus(subId, todayISO, 'taken', site),
-    skipLog: (subId) => { if (subId) setStatus(subId, todayISO, 'skipped'); },
-    addSubstance: async (sub) => {
-      const created = await db.createSubstance(sub);
-      setSubs((prev) => [...prev, created]);
-    },
-    openAddVial: () => setVialSheet('new'),
-    editVial: (sub) => setVialSheet(sub),
-    updateSubstance: async (id, s) => {
-      const updated = await db.updateSubstance(id, s);
-      setSubs((prev) => prev.map((x) => (x.id === id ? updated : x)));
-    },
-    deleteSubstance: async (id) => {
-      await db.deleteSubstance(id);
-      setSubs((prev) => prev.filter((x) => x.id !== id));
-      if (detailId === id) {
-        setDetailId(null);
-        setClosing(false);
-      }
-    },
+    toggle,
+    open,
+    log,
+    openLog,
+    confirmLog,
+    skipLog,
+    addSubstance,
+    openAddVial,
+    editVial,
+    updateSubstance,
+    deleteSubstance,
     metrics,
-    saveMetric: async (date, fields) => {
-      const saved = await db.upsertMetric(date, fields);
-      setMetrics((prev) => [...prev.filter((m) => m.date !== date), saved].sort((a, b) => a.date.localeCompare(b.date)));
-    },
-    removeMetric: async (date) => {
-      await db.deleteMetric(date);
-      setMetrics((prev) => prev.filter((m) => m.date !== date));
-    },
-  };
+    saveMetric,
+    removeMetric,
+  }), [subs, takenToday, logs, sites, metrics, statusOf, setStatus, lastSiteFor, toggle, open, log, openLog, confirmLog, skipLog, addSubstance, openAddVial, editVial, updateSubstance, deleteSubstance, saveMetric, removeMetric]);
 
   // ---- Gating ----
   if (!configured) {
@@ -335,11 +364,13 @@ export function VialApp() {
             {loadError}
           </div>
         )}
-        {tab === 'today' && <TodayScreen app={app} />}
-        {tab === 'schedule' && <ScheduleScreen app={app} />}
-        {tab === 'progress' && <ProgressScreen app={app} />}
-        {tab === 'vials' && <InventoryScreen app={app} />}
-        {tab === 'calc' && <CalculatorScreen app={app} />}
+        <div key={tab} style={{ animation: 'fadeIn .18s ease' }}>
+          {tab === 'today' && <TodayScreen app={app} />}
+          {tab === 'schedule' && <ScheduleScreen app={app} />}
+          {tab === 'progress' && <ProgressScreen app={app} />}
+          {tab === 'vials' && <InventoryScreen app={app} />}
+          {tab === 'calc' && <CalculatorScreen app={app} />}
+        </div>
       </div>
 
       {sub && (

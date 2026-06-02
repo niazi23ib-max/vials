@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import { adherence, streak, dayStatus, isoDate } from '@/lib/substances';
 import { Label } from './ui';
 import type { AppApi } from './types';
@@ -24,27 +25,36 @@ function Metric({ value, label, tone }: { value: string; label: string; tone?: s
   );
 }
 
-export function AdherencePanel({ app }: { app: AppApi }) {
+export const AdherencePanel = memo(function AdherencePanel({ app }: { app: AppApi }) {
   const subs = app.substances;
-  if (!subs.length) return null;
+  const { logs } = app;
 
-  const now = new Date();
-  const a7 = adherence(subs, app.logs, 7, now);
-  const a30 = adherence(subs, app.logs, 30, now);
-  const st = streak(subs, app.logs, now);
+  // All adherence math (7/30-day %, streak, and the 70-cell heatmap) in one memo,
+  // recomputed only when the schedule or logs change. dayStatus is called ONCE per
+  // cell here (the render used to call it twice — for background and border).
+  const data = useMemo(() => {
+    if (!subs.length) return null;
+    const now = new Date();
+    const a7 = adherence(subs, logs, 7, now);
+    const a30 = adherence(subs, logs, 30, now);
+    const st = streak(subs, logs, now);
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    const mondayOffset = (today.getDay() + 6) % 7;
+    const start = new Date(today);
+    start.setDate(today.getDate() - mondayOffset - (WEEKS - 1) * 7);
+    const cells: { iso: string; status: string }[] = [];
+    const d = new Date(start);
+    for (let i = 0; i < WEEKS * 7; i++) {
+      const iso = isoDate(d);
+      cells.push({ iso, status: dayStatus(subs, logs, iso, now) });
+      d.setDate(d.getDate() + 1);
+    }
+    return { a7, a30, st, cells };
+  }, [subs, logs]);
 
-  // Heatmap: WEEKS columns (oldest → newest), Mon–Sun down each column.
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  const mondayOffset = (today.getDay() + 6) % 7;
-  const start = new Date(today);
-  start.setDate(today.getDate() - mondayOffset - (WEEKS - 1) * 7);
-  const cells: string[] = [];
-  const d = new Date(start);
-  for (let i = 0; i < WEEKS * 7; i++) {
-    cells.push(isoDate(d));
-    d.setDate(d.getDate() + 1);
-  }
+  if (!data) return null;
+  const { a7, a30, st, cells } = data;
 
   const pct = (n: number) => `${Math.round(n * 100)}%`;
   const pctTone = (n: number) => (n >= 0.85 ? 'var(--green)' : n >= 0.6 ? 'var(--amber)' : 'var(--red)');
@@ -62,11 +72,11 @@ export function AdherencePanel({ app }: { app: AppApi }) {
         </div>
 
         <div style={{ marginTop: 18, display: 'grid', gridTemplateRows: 'repeat(7, 1fr)', gridAutoFlow: 'column', gridAutoColumns: '1fr', gap: 4 }}>
-          {cells.map((iso) => (
+          {cells.map(({ iso, status }) => (
             <div
               key={iso}
               title={iso}
-              style={{ aspectRatio: '1', borderRadius: 3, background: CELL[dayStatus(subs, app.logs, iso, now)], border: dayStatus(subs, app.logs, iso, now) === 'pending' ? '1px solid var(--line-strong)' : 'none' }}
+              style={{ aspectRatio: '1', borderRadius: 3, background: CELL[status], border: status === 'pending' ? '1px solid var(--line-strong)' : 'none' }}
             />
           ))}
         </div>
@@ -82,4 +92,4 @@ export function AdherencePanel({ app }: { app: AppApi }) {
       </div>
     </div>
   );
-}
+});

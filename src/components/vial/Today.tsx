@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import {
   doseLabelOn, daysLeft, stockStatus, expiryStatus, daysUntil, fillPct, fmtExpiry,
   greeting, isDueOn, isoDate, reconStatus, reconDaysLeft, type Substance,
@@ -13,7 +13,7 @@ interface Ev {
   dose: string; time: string; period: string; route: string;
 }
 
-function DoseRow({ ev, taken, onToggle, onOpen }: { ev: Ev; taken: boolean; onToggle: (id: string) => void; onOpen: (id: string) => void }) {
+const DoseRow = memo(function DoseRow({ ev, taken, onToggle, onOpen }: { ev: Ev; taken: boolean; onToggle: (id: string) => void; onOpen: (id: string) => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '13px 0', borderBottom: '1px solid var(--line)' }}>
       <div style={{ width: 52, textAlign: 'right' }}>
@@ -45,7 +45,7 @@ function DoseRow({ ev, taken, onToggle, onOpen }: { ev: Ev; taken: boolean; onTo
       </button>
     </div>
   );
-}
+});
 
 function AlertRow({ icon, tone, title, detail, onClick }: { icon: ReactNode; tone: 'red' | 'amber'; title: string; detail: string; onClick: () => void }) {
   const c = tone === 'red' ? 'var(--red)' : 'var(--amber)';
@@ -64,24 +64,29 @@ function AlertRow({ icon, tone, title, detail, onClick }: { icon: ReactNode; ton
   );
 }
 
-export function TodayScreen({ app }: { app: AppApi }) {
+export const TodayScreen = memo(function TodayScreen({ app }: { app: AppApi }) {
   const now = new Date();
   const todayISO = isoDate(now);
   const dateLabel = `${now.toLocaleDateString('en-US', { weekday: 'short' })} · ${now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-  const events: Ev[] = app.substances
+  // Heavy (isDueOn + doseLabelOn + sort) — only recompute when the schedule data
+  // changes, not on every parent render.
+  const events: Ev[] = useMemo(() => app.substances
     .filter((s) => isDueOn(s, todayISO))
     .map((s) => ({ id: s.id + '-today', subId: s.id, name: s.name, hue: s.hue, dose: doseLabelOn(s, todayISO), time: s.time, period: s.period, route: s.route }))
-    .sort((a, b) => a.time.localeCompare(b.time));
+    .sort((a, b) => a.time.localeCompare(b.time)), [app.substances, todayISO]);
 
   const total = events.length;
   const done = events.filter((e) => app.taken.has(e.id)).length;
   const next = events.find((e) => !app.taken.has(e.id));
   const nextSub = next ? app.substances.find((s) => s.id === next.subId) : undefined;
 
-  const lowStock = app.substances.filter((s) => stockStatus(s) !== 'ok');
-  const expiring = app.substances.filter((s) => expiryStatus(s) === 'soon');
-  const reconExpiring = app.substances.filter((s) => reconStatus(s) === 'soon' || reconStatus(s) === 'expired');
+  // One pass for the three "needs attention" lists; reconStatus called once per item.
+  const { lowStock, expiring, reconExpiring } = useMemo(() => ({
+    lowStock: app.substances.filter((s) => stockStatus(s) !== 'ok'),
+    expiring: app.substances.filter((s) => expiryStatus(s) === 'soon'),
+    reconExpiring: app.substances.filter((s) => { const r = reconStatus(s); return r === 'soon' || r === 'expired'; }),
+  }), [app.substances]);
 
   return (
     <div style={{ padding: '56px 20px 28px' }}>
@@ -164,4 +169,4 @@ export function TodayScreen({ app }: { app: AppApi }) {
       )}
     </div>
   );
-}
+});

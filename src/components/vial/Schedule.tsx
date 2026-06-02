@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { currentWeek, doseLabelOn, ok, todayName, isoDate, isDueOn, type Substance } from '@/lib/substances';
 import { Label, Monogram, Icon, Sheet } from './ui';
 import type { AppApi } from './types';
@@ -14,19 +14,28 @@ function dayEvents(substances: Substance[], iso: string): Ev[] {
     .sort((a, b) => a.time.localeCompare(b.time));
 }
 
-export function ScheduleScreen({ app }: { app: AppApi }) {
+export const ScheduleScreen = memo(function ScheduleScreen({ app }: { app: AppApi }) {
   const TODAY_NAME = todayName();
   const TODAY_ISO = isoDate(new Date());
   const [weekOffset, setWeekOffset] = useState(0);
   const [sel, setSel] = useState(TODAY_NAME);
   const [backfill, setBackfill] = useState<{ subId: string; iso: string; name: string; label: string } | null>(null);
-  const base = new Date();
-  base.setDate(base.getDate() + weekOffset * 7);
-  const WEEK = currentWeek(base);
-  const selObj = WEEK.find((w) => w.name === sel)!;
-  const events = dayEvents(app.substances, selObj.iso);
+  const WEEK = useMemo(() => {
+    const base = new Date();
+    base.setDate(base.getDate() + weekOffset * 7);
+    return currentWeek(base);
+  }, [weekOffset]);
+  // Compute each of the 7 visible days' events once and reuse for the pills, the week
+  // total, and the selected day (was ~15 dayEvents passes per render).
+  const dayEventsMap = useMemo(() => {
+    const m = new Map<string, Ev[]>();
+    for (const w of WEEK) m.set(w.iso, dayEvents(app.substances, w.iso));
+    return m;
+  }, [app.substances, WEEK]);
+  const selObj = WEEK.find((w) => w.name === sel) ?? WEEK[0];
+  const events = dayEventsMap.get(selObj.iso) ?? [];
   const isFuture = selObj.iso > TODAY_ISO;
-  const weekTotal = WEEK.reduce((n, w) => n + dayEvents(app.substances, w.iso).length, 0);
+  const weekTotal = WEEK.reduce((n, w) => n + (dayEventsMap.get(w.iso)?.length ?? 0), 0);
   const weekTitle = weekOffset === 0 ? 'This week' : weekOffset === -1 ? 'Last week' : weekOffset === 1 ? 'Next week' : `${WEEK[0].mo} ${WEEK[0].d}–${WEEK[6].d}`;
 
   const navBtn = (txt: string, fn: () => void) => (
@@ -49,7 +58,7 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
 
       <div style={{ display: 'flex', gap: 8, padding: '20px 20px 6px', overflowX: 'auto' }}>
         {WEEK.map((w) => {
-          const evs = dayEvents(app.substances, w.iso);
+          const evs = dayEventsMap.get(w.iso) ?? [];
           const isSel = w.name === sel;
           const isToday = w.iso === TODAY_ISO;
           return (
@@ -163,4 +172,4 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
       </Sheet>
     </div>
   );
-}
+});

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo } from 'react';
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabelOn, recon, ok, DAY_ORDER,
   substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, effectiveDoseMcg, isoDate,
@@ -18,22 +19,27 @@ function KV({ label, value, tone }: { label: string; value: string; tone?: strin
   );
 }
 
-export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi; onBack: () => void }) {
+export const DetailScreen = memo(function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi; onBack: () => void }) {
   const s = sub;
-  const form = substanceForm(s);
-  const todayISO = isoDate(new Date());
-  const history = doseHistory(s, app.logs, 6);
-  const r = form === 'inject' ? recon(s.vialMg, s.bacMl, effectiveDoseMcg(s, todayISO)) : null;
-  const stock = stockStatus(s);
-  const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
-  const dpc = dosesPerContainer(s);
-  const costPerDose = dpc > 0 ? s.pricePerVial / dpc : 0;
-  const course = courseInfo(s);
-  const titrating = hasTitrationSchedule(s);
+  // Heavy derived block (doseHistory + recon + courseInfo + dosesPerContainer + the
+  // status helpers) — recompute only when this vial or the log set changes.
+  const { form, todayISO, history, r, stock, runwayTone, costPerDose, course, titrating } = useMemo(() => {
+    const form = substanceForm(s);
+    const todayISO = isoDate(new Date());
+    const history = doseHistory(s, app.logs, 6);
+    const r = form === 'inject' ? recon(s.vialMg, s.bacMl, effectiveDoseMcg(s, todayISO)) : null;
+    const stock = stockStatus(s);
+    const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
+    const dpc = dosesPerContainer(s);
+    const costPerDose = dpc > 0 ? s.pricePerVial / dpc : 0;
+    const course = courseInfo(s);
+    const titrating = hasTitrationSchedule(s);
+    return { form, todayISO, history, r, stock, runwayTone, costPerDose, course, titrating };
+  }, [s, app.logs]);
 
   return (
     <div style={{ minHeight: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'linear-gradient(var(--bg), rgba(16,13,10,0.85))', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 16px 10px' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 16px 10px' }}>
         <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Icon.back /></button>
         <Label>{s.category}</Label>
         <button
@@ -179,4 +185,4 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
       </div>
     </div>
   );
-}
+});
