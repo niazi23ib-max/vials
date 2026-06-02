@@ -20,7 +20,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b14';
+const BUILD = 'b15';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -92,6 +92,7 @@ export function VialApp() {
   const [closing, setClosing] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; subId: string | null }>({ open: false, subId: null });
   const [vialSheet, setVialSheet] = useState<'new' | Substance | null>(null);
+  const [diag, setDiag] = useState('');
 
   const loadData = useCallback(async () => {
     const since = new Date();
@@ -152,6 +153,26 @@ export function VialApp() {
       .then((reg) => reg.update())
       .catch(() => {});
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+  }, []);
+
+  // TEMP diagnostic: report this device's real viewport numbers so we can see
+  // which height value is wrong (why the UI overflows the screen).
+  useEffect(() => {
+    const px = (id: string) => {
+      const el = document.getElementById(id);
+      return el ? Math.round(el.getBoundingClientRect().height) : -1;
+    };
+    const read = () => {
+      const ih = Math.round(window.innerHeight);
+      const vv = window.visualViewport ? Math.round(window.visualViewport.height) : -1;
+      const cl = document.documentElement.clientHeight;
+      setDiag(`ih${ih} vv${vv} cl${cl} svh${px('p-svh')} dvh${px('p-dvh')} lvh${px('p-lvh')} sab${px('p-sab')} sat${px('p-sat')}`);
+    };
+    read();
+    const t = setTimeout(read, 600);
+    window.addEventListener('resize', read);
+    window.visualViewport?.addEventListener('resize', read);
+    return () => { clearTimeout(t); window.removeEventListener('resize', read); window.visualViewport?.removeEventListener('resize', read); };
   }, []);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
@@ -303,9 +324,15 @@ export function VialApp() {
 
   return (
     <div style={shell}>
-      {/* Build marker — confirms which build the installed PWA is actually running. */}
-      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 16px)', left: 'calc(env(safe-area-inset-left, 0px) + 18px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-faint)', pointerEvents: 'none' }}>
-        {BUILD}
+      {/* Hidden probes to measure how this device resolves viewport units + safe areas. */}
+      <div id="p-svh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100svh', opacity: 0, pointerEvents: 'none' }} />
+      <div id="p-dvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100dvh', opacity: 0, pointerEvents: 'none' }} />
+      <div id="p-lvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100lvh', opacity: 0, pointerEvents: 'none' }} />
+      <div id="p-sab" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-bottom, 0px)', opacity: 0, pointerEvents: 'none' }} />
+      <div id="p-sat" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-top, 0px)', opacity: 0, pointerEvents: 'none' }} />
+      {/* TEMP build + viewport diagnostic readout (top-left). */}
+      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 4px)', left: 'calc(env(safe-area-inset-left, 0px) + 8px)', right: 'calc(env(safe-area-inset-right, 0px) + 48px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, lineHeight: 1.3, color: 'var(--amber)', pointerEvents: 'none' }}>
+        {BUILD} · {diag}
       </div>
       {/* sign out */}
       <button
