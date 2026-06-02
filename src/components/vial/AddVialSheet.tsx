@@ -8,7 +8,7 @@ import {
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
 import type { AppApi } from './types';
-import { PEPTIDE_PRESETS, PRESET_GROUPS, type PeptidePreset } from '@/lib/peptides';
+import { LIBRARY, LIBRARY_KINDS, type LibraryItem, type LibraryKind } from '@/lib/library';
 
 type DoseUnit = 'mcg' | 'mg' | 'IU';
 
@@ -45,7 +45,7 @@ function Fld({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Short frequency label for a preset's suggested schedule. */
-function presetFreqLabel(p: PeptidePreset): string {
+function presetFreqLabel(p: LibraryItem): string {
   const s = p.schedule;
   if (s.kind === 'interval') {
     const n = s.intervalDays ?? 1;
@@ -58,19 +58,24 @@ function presetFreqLabel(p: PeptidePreset): string {
   return `${d.length}×/wk`;
 }
 
-/** Collapsible "start from a known peptide" picker — prefills the form. Add mode only. */
-function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
+/** Collapsible "start from the library" picker — prefills the form. Add mode only. */
+function LibraryPicker({ onPick }: { onPick: (p: LibraryItem) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const [kind, setKind] = useState<'All' | LibraryKind>('All');
   const query = q.trim().toLowerCase();
-  const matches = PEPTIDE_PRESETS.filter(
-    (p) =>
-      !query ||
+  const matches = LIBRARY.filter((p) => {
+    if (kind !== 'All' && p.kind !== kind) return false;
+    if (!query) return true;
+    return (
       p.name.toLowerCase().includes(query) ||
       (p.aka ?? '').toLowerCase().includes(query) ||
       p.blurb.toLowerCase().includes(query) ||
-      p.group.toLowerCase().includes(query),
-  );
+      (p.group ?? '').toLowerCase().includes(query) ||
+      p.kind.toLowerCase().includes(query)
+    );
+  });
+  const chips: Array<'All' | LibraryKind> = ['All', ...LIBRARY_KINDS];
   return (
     <div>
       <button
@@ -81,7 +86,7 @@ function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: 'var(--amber)', flexShrink: 0 }}>
           <path d="M9 2l1.6 3.6L14.5 7l-3.9 1.4L9 12l-1.6-3.6L3.5 7l3.9-1.4L9 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
         </svg>
-        <span style={{ flex: 1, textAlign: 'left', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500 }}>Start from peptide library</span>
+        <span style={{ flex: 1, textAlign: 'left', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500 }}>Start from library</span>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
           <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -89,22 +94,38 @@ function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
 
       {open && (
         <div style={{ marginTop: 10 }}>
+          {/* category filter chips */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', overscrollBehavior: 'contain', paddingBottom: 4, marginBottom: 8 }}>
+            {chips.map((c) => {
+              const active = kind === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setKind(c)}
+                  style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 999, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'var(--mono)', fontSize: 11, border: `1px solid ${active ? 'var(--text)' : 'var(--line)'}`, background: active ? 'var(--text)' : 'transparent', color: active ? 'var(--bg)' : 'var(--text-dim)' }}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
           <input
             className="vlf" style={inputStyle} value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Search peptides…" autoFocus
+            placeholder="Search the library…" autoFocus
           />
           <div style={{ maxHeight: 300, overflowY: 'auto', overscrollBehavior: 'contain', marginTop: 8 }}>
-            {PRESET_GROUPS.map((g) => {
-              const items = matches.filter((m) => m.group === g);
+            {LIBRARY_KINDS.map((k) => {
+              const items = matches.filter((m) => m.kind === k);
               if (!items.length) return null;
               return (
-                <div key={g} style={{ marginTop: 6 }}>
-                  <div style={{ padding: '6px 2px' }}><Label>{g}</Label></div>
+                <div key={k} style={{ marginTop: 6 }}>
+                  <div style={{ padding: '6px 2px' }}><Label>{k}</Label></div>
                   {items.map((p) => (
                     <button
                       key={p.name}
                       type="button"
-                      onClick={() => { onPick(p); setOpen(false); setQ(''); }}
+                      onClick={() => { onPick(p); setOpen(false); setQ(''); setKind('All'); }}
                       style={{ width: '100%', textAlign: 'left', display: 'block', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface-2)', cursor: 'pointer', marginBottom: 7 }}
                     >
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -113,7 +134,7 @@ function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
                       </div>
                       <div style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--text-dim)', marginTop: 3, lineHeight: 1.35 }}>{p.blurb}</div>
                       <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)', marginTop: 5 }}>
-                        {p.dose} {p.doseUnit} · {presetFreqLabel(p)} · t½ {p.halfLife}
+                        {p.dose > 0 ? `${p.dose} ${p.doseUnit} · ` : ''}{presetFreqLabel(p)}{p.halfLife ? ` · t½ ${p.halfLife}` : ''}
                       </div>
                     </button>
                   ))}
@@ -121,7 +142,7 @@ function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
               );
             })}
             {matches.length === 0 && (
-              <div style={{ padding: '14px 4px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)' }}>No matches for “{q}”.</div>
+              <div style={{ padding: '14px 4px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)' }}>No matches{q ? ` for “${q}”` : ''}.</div>
             )}
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.5 }}>
@@ -256,7 +277,7 @@ export function AddVialSheet({
   }
 
   // Prefill the whole form from a library preset (all values stay editable).
-  function applyPreset(p: PeptidePreset) {
+  function applyPreset(p: LibraryItem) {
     const f = formOf(p.route);
     setName(p.name);
     setCategory(p.category);
@@ -271,6 +292,7 @@ export function AddVialSheet({
       setVialMg(p.vialMg ? String(p.vialMg) : '');
       setBacMl(f === 'inject' ? String(p.bacMl ?? 2) : '');
       setCount('');
+      setCapsPerDose('1'); // reset so it can't leak from a prior oral pick
     }
     setDoseValue(String(p.dose));
     setDoseUnit(p.doseUnit);
@@ -278,7 +300,7 @@ export function AddVialSheet({
     if (p.schedule.kind === 'weekly') setDays(p.schedule.days?.length ? [...p.schedule.days] : [...DAY_ORDER]);
     if (p.schedule.kind === 'interval') setIntervalDays(String(p.schedule.intervalDays ?? 2));
     if (p.schedule.kind === 'cycle') { setCycleOn(String(p.schedule.cycleOn ?? 5)); setCycleOff(String(p.schedule.cycleOff ?? 2)); }
-    if (p.time) setTime(p.time);
+    setTime(p.time ?? '08:00'); // reset so a timed pick (e.g. Melatonin 22:00) doesn't leave a stale time
     setCourseWeeks(p.courseWeeks ? String(p.courseWeeks) : '');
     setError(null);
   }
