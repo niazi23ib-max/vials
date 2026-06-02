@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b19';
+const BUILD = 'b20';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -413,16 +413,9 @@ export function VialApp() {
           flex-column shell. Its background fills the home-indicator safe area via
           padding-bottom: env(safe-area-inset-bottom). */}
       <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'calc(var(--sab, 34px) + 14px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
-          <button
-            onClick={app.openLog}
-            aria-label="Log a dose"
-            style={{ width: 50, height: 50, marginLeft: 4, marginRight: 4, marginTop: -22, borderRadius: '50%', border: '3px solid var(--surface-2)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)' }}
-          >
-            <Icon.plus />
-          </button>
           <NavBtn tab={TABS[2]} active={tab === 'progress'} onClick={() => setTab('progress')} />
           <NavBtn tab={TABS[3]} active={tab === 'vials'} onClick={() => setTab('vials')} />
           <NavBtn tab={TABS[4]} active={tab === 'calc'} onClick={() => setTab('calc')} />

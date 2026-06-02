@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import {
   doseLabelOn, daysLeft, stockStatus, expiryStatus, daysUntil, fillPct, fmtExpiry,
-  greeting, isDueOn, isoDate, type Substance,
+  greeting, isDueOn, isoDate, reconStatus, reconDaysLeft, type Substance,
 } from '@/lib/substances';
 import { Monogram, Label, Icon, VialFill } from './ui';
 import type { AppApi } from './types';
@@ -81,6 +81,7 @@ export function TodayScreen({ app }: { app: AppApi }) {
 
   const lowStock = app.substances.filter((s) => stockStatus(s) !== 'ok');
   const expiring = app.substances.filter((s) => expiryStatus(s) === 'soon');
+  const reconExpiring = app.substances.filter((s) => reconStatus(s) === 'soon' || reconStatus(s) === 'expired');
 
   return (
     <div style={{ padding: '56px 20px 28px' }}>
@@ -134,13 +135,27 @@ export function TodayScreen({ app }: { app: AppApi }) {
         ))}
       </div>
 
-      {(lowStock.length > 0 || expiring.length > 0) && (
+      {(lowStock.length > 0 || expiring.length > 0 || reconExpiring.length > 0) && (
         <div style={{ marginTop: 30 }}>
           <Label>Needs attention</Label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
             {lowStock.map((s: Substance) => (
               <AlertRow key={s.id} tone={daysLeft(s) <= 7 ? 'red' : 'amber'} icon={<Icon.bell />} title={`${s.name} running low`} detail={`${daysLeft(s)} days of supply left`} onClick={() => app.open(s.id)} />
             ))}
+            {reconExpiring.map((s: Substance) => {
+              const expired = reconStatus(s) === 'expired';
+              const left = reconDaysLeft(s);
+              return (
+                <AlertRow
+                  key={`recon-${s.id}`}
+                  tone={expired ? 'red' : 'amber'}
+                  icon={<Icon.clock />}
+                  title={expired ? `${s.name} past use-by` : `${s.name} mixed vial expiring`}
+                  detail={expired ? `Reconstituted ${-left} days past shelf life` : `Mixed vial good for ${left} more ${left === 1 ? 'day' : 'days'}`}
+                  onClick={() => app.open(s.id)}
+                />
+              );
+            })}
             {expiring.map((s: Substance) => (
               <AlertRow key={s.id} tone="amber" icon={<Icon.clock />} title={`${s.name} expires soon`} detail={`In ${daysUntil(s.expiry)} days · ${fmtExpiry(s.expiry)}`} onClick={() => app.open(s.id)} />
             ))}

@@ -83,6 +83,12 @@ export interface Substance {
   expiry: string;
   pricePerVial: number;
   lot: string;
+  /** inject only: ISO date the vial was reconstituted (mixed). '' if not tracked. */
+  reconstitutedAt: string;
+  /** inject only: days a mixed vial stays good (refrigerated). 0 → app default. */
+  budDays: number;
+  /** whether dose-reminder pushes fire for this substance. */
+  remindersEnabled: boolean;
   titration: TitrationStep[] | null;
   /** ISO date the vial was added — the floor for adherence/history (no "missed" before this). */
   created: string;
@@ -317,6 +323,35 @@ export function stockStatus(s: Substance): StockStatus {
 }
 export function expiryStatus(s: Substance): 'soon' | 'ok' {
   return daysUntil(s.expiry) <= 30 ? 'soon' : 'ok';
+}
+
+// ── Reconstitution shelf-life (injectables) ──────────────────────
+/** Default beyond-use window (days) for a reconstituted vial, refrigerated. */
+export const RECON_DEFAULT_BUD = 28;
+/** Beyond-use date for a mixed vial, or '' if not an injectable / not mixed. */
+export function reconBUDDate(s: Substance): string {
+  if (formOf(s.route) !== 'inject' || !s.reconstitutedAt) return '';
+  return addDaysISO(s.reconstitutedAt, s.budDays > 0 ? s.budDays : RECON_DEFAULT_BUD);
+}
+/** Days until the mixed vial's beyond-use date (negative = already past it). */
+export function reconDaysLeft(s: Substance, now = new Date()): number {
+  const bud = reconBUDDate(s);
+  return bud ? daysUntil(bud, now) : Infinity;
+}
+/** Whole days since the vial was reconstituted, or -1 if not tracked. */
+export function daysSinceRecon(s: Substance, now = new Date()): number {
+  if (formOf(s.route) !== 'inject' || !s.reconstitutedAt) return -1;
+  return -daysUntil(s.reconstitutedAt, now);
+}
+export type ReconStatus = 'none' | 'fresh' | 'soon' | 'expired';
+/** Shelf-life status of a mixed vial: fresh / soon (≤7d) / expired (past BUD). */
+export function reconStatus(s: Substance, now = new Date()): ReconStatus {
+  const bud = reconBUDDate(s);
+  if (!bud) return 'none';
+  const d = daysUntil(bud, now);
+  if (d < 0) return 'expired';
+  if (d <= 7) return 'soon';
+  return 'fresh';
 }
 
 export interface Recon {

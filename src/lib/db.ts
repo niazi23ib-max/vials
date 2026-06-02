@@ -34,6 +34,9 @@ interface SubRow {
   expiry: string | null;
   price_per_vial: number | string;
   lot: string | null;
+  reconstituted_at: string | null;
+  bud_days: number | string | null;
+  reminders_enabled: boolean | null;
   titration: TitrationStep[] | null;
   created_at: string;
 }
@@ -67,6 +70,9 @@ function rowToSubstance(r: SubRow): Substance {
     expiry: r.expiry ?? '',
     pricePerVial: Number(r.price_per_vial),
     lot: r.lot ?? '',
+    reconstitutedAt: r.reconstituted_at ?? '',
+    budDays: Number(r.bud_days) || 0,
+    remindersEnabled: r.reminders_enabled !== false, // default true (legacy/null)
     titration: r.titration ?? null,
     created: r.created_at ? r.created_at.slice(0, 10) : '',
   };
@@ -119,6 +125,9 @@ function subToRow(s: Substance) {
     expiry: s.expiry || null,
     price_per_vial: s.pricePerVial,
     lot: s.lot || null,
+    reconstituted_at: s.reconstitutedAt || null,
+    bud_days: s.budDays > 0 ? s.budDays : null,
+    reminders_enabled: s.remindersEnabled,
     titration: s.titration,
   };
 }

@@ -3,7 +3,8 @@
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabelOn, recon, ok, DAY_ORDER,
   substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, effectiveDoseMcg, isoDate,
-  scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite, type Substance,
+  scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite,
+  reconStatus, reconDaysLeft, daysSinceRecon, reconBUDDate, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
@@ -55,6 +56,8 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
               <Chip>{s.route}</Chip>
               {stock !== 'ok' && <Chip tone={stock === 'critical' ? 'red' : 'amber'}>{daysLeft(s)}d left</Chip>}
               {expiryStatus(s) === 'soon' && <Chip tone="amber">Exp soon</Chip>}
+              {reconStatus(s) === 'expired' && <Chip tone="red">Past use-by</Chip>}
+              {reconStatus(s) === 'soon' && <Chip tone="amber">Use soon</Chip>}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -72,6 +75,27 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
             <div style={{ height: '100%', width: `${fillPct(s) * 100}%`, borderRadius: 99, background: `linear-gradient(90deg, ${ok(0.6, 0.12, s.hue)}, ${ok(0.74, 0.13, s.hue)})` }} />
           </div>
         </div>
+
+        {form === 'inject' && s.reconstitutedAt && (() => {
+          const st = reconStatus(s);
+          const left = reconDaysLeft(s);
+          const since = daysSinceRecon(s);
+          const budISO = reconBUDDate(s);
+          const tone = st === 'expired' ? 'var(--red)' : st === 'soon' ? 'var(--amber)' : 'var(--text)';
+          const border = st === 'expired' ? 'var(--red)' : st === 'soon' ? 'var(--amber)' : 'var(--line)';
+          return (
+            <div style={{ marginTop: 12, padding: '13px 15px', background: 'var(--surface)', border: `1px solid ${border}`, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <Label style={{ fontSize: 9 }}>Reconstituted</Label>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--text)', marginTop: 5 }}>Mixed {since}d ago</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 14, color: tone }}>{st === 'expired' ? `Past use-by · ${-left}d` : `${left}d shelf life left`}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)', marginTop: 3 }}>use by {new Date(budISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+              </div>
+            </div>
+          );
+        })()}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
           <KV label={titrating ? 'Dose · now' : 'Dose'} value={doseLabelOn(s, todayISO)} tone={titrating ? 'var(--amber)' : undefined} />

@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
+  addDaysISO, daysUntil, RECON_DEFAULT_BUD,
   type Substance, type ScheduleKind,
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
@@ -168,6 +169,9 @@ export function AddVialSheet({
   const [price, setPrice] = useState('');
   const [expiry, setExpiry] = useState('');
   const [lot, setLot] = useState('');
+  const [reconAt, setReconAt] = useState(''); // inject: date mixed
+  const [budDaysStr, setBudDaysStr] = useState(''); // inject: shelf-life days
+  const [remindersOn, setRemindersOn] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const form = formOf(route);
@@ -206,6 +210,9 @@ export function AddVialSheet({
       setPrice(editing.pricePerVial ? String(editing.pricePerVial) : '');
       setExpiry(editing.expiry || defaultExpiryISO());
       setLot(editing.lot || '');
+      setReconAt(editing.reconstitutedAt || '');
+      setBudDaysStr(editing.budDays ? String(editing.budDays) : '');
+      setRemindersOn(editing.remindersEnabled !== false);
     } else {
       setName('');
       setCategory('Peptide');
@@ -229,6 +236,9 @@ export function AddVialSheet({
       setPrice('');
       setExpiry(defaultExpiryISO());
       setLot('');
+      setReconAt('');
+      setBudDaysStr('');
+      setRemindersOn(true);
     }
   }, [open, editing]);
 
@@ -280,6 +290,11 @@ export function AddVialSheet({
   const doseRaw = doseValue === '' ? 0 : Number(doseValue);
   const doseMcgInject = doseUnit === 'mg' ? doseRaw * 1000 : doseRaw; // mcg (inject/dose)
   const preview = form === 'inject' && mg > 0 && bac > 0 && doseMcgInject > 0 ? recon(mg, bac, doseMcgInject) : null;
+
+  // Reconstitution shelf-life preview (inject form).
+  const budN = Number(budDaysStr) > 0 ? Math.floor(Number(budDaysStr)) : RECON_DEFAULT_BUD;
+  const reconBudISO = form === 'inject' && reconAt ? addDaysISO(reconAt, budN) : '';
+  const reconLeft = reconBudISO ? daysUntil(reconBudISO) : null;
 
   // Amount-left readout (edit mode).
   const leftRaw = amountLeft === '' ? 0 : Number(amountLeft);
@@ -334,6 +349,9 @@ export function AddVialSheet({
       expiry: expiry || defaultExpiryISO(),
       pricePerVial: price === '' ? 0 : Math.max(0, Number(price)),
       lot: lot.trim(),
+      reconstitutedAt: form === 'inject' ? reconAt : '',
+      budDays: form === 'inject' && Number(budDaysStr) > 0 ? Math.floor(Number(budDaysStr)) : 0,
+      remindersEnabled: remindersOn,
       titration: editing ? editing.titration : null,
       hue: editing ? editing.hue : pickHue(app.substances.length),
       created: editing ? editing.created : '', // server stamps created_at; refreshed on reload
@@ -561,7 +579,26 @@ export function AddVialSheet({
           <input className="vlf" style={inputStyle} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
         </Fld>
 
-        <Fld label="Expires / BUD">
+        {form === 'inject' && (
+          <>
+            <Fld label="Reconstituted on (optional)">
+              <input className="vlf" style={inputStyle} type="date" value={reconAt} onChange={(e) => setReconAt(e.target.value)} />
+            </Fld>
+            <Fld label="Use within">
+              <div style={{ position: 'relative' }}>
+                <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="1" value={budDaysStr} onChange={(e) => setBudDaysStr(e.target.value)} placeholder={String(RECON_DEFAULT_BUD)} />
+                <span style={adorn}>days</span>
+              </div>
+              {reconBudISO && reconLeft !== null && (
+                <div style={{ marginTop: 7, fontFamily: 'var(--mono)', fontSize: 11.5, color: reconLeft < 0 ? 'var(--red)' : reconLeft <= 7 ? 'var(--amber)' : 'var(--text-dim)' }}>
+                  {reconLeft < 0 ? `Past use-by · ${-reconLeft}d ago` : `~${reconLeft} days of shelf life left`} · use by {new Date(reconBudISO + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </div>
+              )}
+            </Fld>
+          </>
+        )}
+
+        <Fld label="Expiry date">
           <input className="vlf" style={inputStyle} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
         </Fld>
 
@@ -580,6 +617,21 @@ export function AddVialSheet({
             </Fld>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setRemindersOn((v) => !v)}
+          aria-pressed={remindersOn}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--line-strong)', background: 'var(--surface-2)', cursor: 'pointer' }}
+        >
+          <span style={{ textAlign: 'left' }}>
+            <span style={{ display: 'block', fontFamily: 'var(--sans)', fontSize: 14, color: 'var(--text)' }}>Dose reminders</span>
+            <span style={{ display: 'block', fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)', marginTop: 2 }}>Push a nudge at each dose time</span>
+          </span>
+          <span style={{ flexShrink: 0, width: 44, height: 26, borderRadius: 99, background: remindersOn ? 'var(--amber)' : 'var(--line-strong)', position: 'relative', transition: 'background .2s' }}>
+            <span style={{ position: 'absolute', top: 3, left: remindersOn ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--text)', transition: 'left .2s' }} />
+          </span>
+        </button>
 
         {error && (
           <div style={{ padding: '10px 13px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 12, color: 'var(--red)', fontSize: 13.5 }}>

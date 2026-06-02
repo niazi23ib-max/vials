@@ -28,11 +28,12 @@ interface SubRow {
   interval_days: number | string | null; cycle_on: number | string | null; cycle_off: number | string | null;
   anchor_date: string | null; course_start: string | null; course_weeks: number | string | null;
   created_at: string | null; time: string | null; titration: TitrationStep[] | null;
+  reminders_enabled: boolean | null;
 }
 interface PushRow { user_id: string; endpoint: string; p256dh: string; auth: string; tz: string; }
 
 const SUB_COLS =
-  'id,user_id,name,route,unit,dose_mcg,caps_per_dose,schedule_kind,days,interval_days,cycle_on,cycle_off,anchor_date,course_start,course_weeks,created_at,time,titration';
+  'id,user_id,name,route,unit,dose_mcg,caps_per_dose,schedule_kind,days,interval_days,cycle_on,cycle_off,anchor_date,course_start,course_weeks,created_at,time,titration,reminders_enabled';
 
 /** Map a DB row to a Substance for the shared scheduling/dose helpers (unused fields defaulted). */
 function toSub(r: SubRow): Substance {
@@ -45,6 +46,7 @@ function toSub(r: SubRow): Substance {
     cycleOn: Number(r.cycle_on) || 0, cycleOff: Number(r.cycle_off) || 0,
     anchor: r.anchor_date ?? '', courseStart: r.course_start ?? '', courseWeeks: Number(r.course_weeks) || 0,
     time: r.time ?? '', period: 'AM', remaining: 0, expiry: '', pricePerVial: 0, lot: '',
+    reconstitutedAt: '', budDays: 0, remindersEnabled: r.reminders_enabled !== false,
     titration: r.titration ?? null, created: r.created_at ? r.created_at.slice(0, 10) : '',
   };
 }
@@ -108,6 +110,7 @@ export async function GET(req: Request) {
   for (const { user_id, sub } of substances) {
     const u = byUser.get(user_id);
     if (!u) continue;
+    if (!sub.remindersEnabled) continue; // user muted reminders for this item
     const dm = doseMinutes(sub.time);
     if (dm === null) continue;
     const t = localParts(now, u.tz);
