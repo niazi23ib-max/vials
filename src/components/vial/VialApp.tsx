@@ -329,7 +329,7 @@ export function VialApp() {
       {/* bottom nav — docked bar with a solid surface that fills to the screen
           bottom (incl. the home-indicator safe area) so it reads as anchored,
           not floating in a void. */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 6, paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(30px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
