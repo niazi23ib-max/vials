@@ -201,7 +201,7 @@ export function Sheet({
           borderTop: '1px solid var(--line-strong)',
           transform: open ? 'translateY(0)' : 'translateY(110%)',
           transition: 'transform .34s cubic-bezier(.32,.72,0,1)',
-          paddingBottom: 38, maxHeight: '88%', overflow: 'auto',
+          paddingBottom: 'calc(38px + env(safe-area-inset-bottom, 0px))', maxHeight: '92dvh', overflow: 'auto',
           boxShadow: '0 -20px 50px rgba(0,0,0,0.5)',
         }}
       >
