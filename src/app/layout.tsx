@@ -27,6 +27,14 @@ export const metadata: Metadata = {
     "A minimalist tracker for peptides, supplements, and medications — calendar, inventory, and dosing calculator.",
   applicationName: "Vial",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Vial" },
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {

@@ -111,6 +111,13 @@ export function VialApp() {
     };
   }, [user, loadData]);
 
+  // Register the service worker (enables install + push notifications).
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {});
+    }
+  }, []);
+
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
   useEffect(() => {
     if (!isSupabaseConfigured) return;
