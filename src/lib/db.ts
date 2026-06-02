@@ -19,7 +19,14 @@ interface SubRow {
   dose_mcg: number | string;
   unit: 'mcg' | 'mg' | 'IU';
   every: string;
+  schedule_kind: string | null;
   days: string[] | null;
+  interval_days: number | string | null;
+  cycle_on: number | string | null;
+  cycle_off: number | string | null;
+  anchor_date: string | null;
+  course_start: string | null;
+  course_weeks: number | string | null;
   time: string | null;
   period: string | null;
   remaining: number | string;
@@ -45,7 +52,14 @@ function rowToSubstance(r: SubRow): Substance {
     doseMcg: Number(r.dose_mcg) || 0,
     unit: r.unit,
     every: r.every as Substance['every'],
+    scheduleKind: (r.schedule_kind as Substance['scheduleKind']) ?? 'weekly',
     days: r.days ?? [],
+    intervalDays: Number(r.interval_days) || 0,
+    cycleOn: Number(r.cycle_on) || 0,
+    cycleOff: Number(r.cycle_off) || 0,
+    anchor: r.anchor_date ?? '',
+    courseStart: r.course_start ?? '',
+    courseWeeks: Number(r.course_weeks) || 0,
     time: r.time ?? '',
     period: (r.period as 'AM' | 'PM') ?? 'AM',
     remaining: Number(r.remaining),
@@ -75,10 +89,9 @@ export async function listSubstances(): Promise<Substance[]> {
   return (data as SubRow[]).map(rowToSubstance);
 }
 
-export async function createSubstance(s: Substance): Promise<Substance> {
-  const user_id = await uid();
-  const row = {
-    user_id,
+/** Substance → DB columns (shared by insert + update). */
+function subToRow(s: Substance) {
+  return {
     name: s.name,
     category: s.category,
     sub: s.sub || null,
@@ -91,7 +104,14 @@ export async function createSubstance(s: Substance): Promise<Substance> {
     dose_mcg: s.doseMcg,
     unit: s.unit,
     every: s.every,
+    schedule_kind: s.scheduleKind || 'weekly',
     days: s.days,
+    interval_days: s.scheduleKind === 'interval' && s.intervalDays > 0 ? s.intervalDays : null,
+    cycle_on: s.scheduleKind === 'cycle' && s.cycleOn > 0 ? s.cycleOn : null,
+    cycle_off: s.scheduleKind === 'cycle' ? Math.max(0, s.cycleOff) : null,
+    anchor_date: s.anchor || null,
+    course_start: s.courseStart || null,
+    course_weeks: s.courseWeeks > 0 ? s.courseWeeks : null,
     time: s.time || null,
     period: s.period,
     remaining: s.remaining,
@@ -100,9 +120,13 @@ export async function createSubstance(s: Substance): Promise<Substance> {
     lot: s.lot || null,
     titration: s.titration,
   };
+}
+
+export async function createSubstance(s: Substance): Promise<Substance> {
+  const user_id = await uid();
   const { data, error } = await createClient()
     .from('substances')
-    .insert(row)
+    .insert({ user_id, ...subToRow(s) })
     .select()
     .single();
   if (error) throw error;
@@ -110,31 +134,9 @@ export async function createSubstance(s: Substance): Promise<Substance> {
 }
 
 export async function updateSubstance(id: string, s: Substance): Promise<Substance> {
-  const row = {
-    name: s.name,
-    category: s.category,
-    sub: s.sub || null,
-    route: s.route,
-    hue: s.hue,
-    vial_mg: s.vialMg > 0 ? s.vialMg : null,
-    bac_ml: s.bacMl > 0 ? s.bacMl : null,
-    count: s.count > 0 ? s.count : null,
-    caps_per_dose: s.capsPerDose > 0 ? s.capsPerDose : null,
-    dose_mcg: s.doseMcg,
-    unit: s.unit,
-    every: s.every,
-    days: s.days,
-    time: s.time || null,
-    period: s.period,
-    remaining: s.remaining,
-    expiry: s.expiry || null,
-    price_per_vial: s.pricePerVial,
-    lot: s.lot || null,
-    titration: s.titration,
-  };
   const { data, error } = await createClient()
     .from('substances')
-    .update(row)
+    .update(subToRow(s))
     .eq('id', id)
     .select()
     .single();
@@ -161,13 +163,14 @@ export interface DoseLogRow {
   substance_id: string;
   scheduled_date: string;
   status: 'taken' | 'skipped';
+  site: string | null;
 }
 
 /** All of the user's dose logs on or after `sinceISO` (for history, the week view, and stats). */
 export async function listLogs(sinceISO: string): Promise<DoseLogRow[]> {
   const { data, error } = await createClient()
     .from('dose_logs')
-    .select('id,substance_id,scheduled_date,status')
+    .select('id,substance_id,scheduled_date,status,site')
     .gte('scheduled_date', sinceISO)
     .order('scheduled_date', { ascending: false });
   if (error) throw error;
@@ -178,6 +181,7 @@ export async function setLog(
   substanceId: string,
   dateISO: string,
   status: 'taken' | 'skipped',
+  site?: string | null,
 ): Promise<void> {
   const user_id = await uid();
   const { error } = await createClient()
@@ -188,6 +192,7 @@ export async function setLog(
         substance_id: substanceId,
         scheduled_date: dateISO,
         status,
+        site: status === 'taken' ? site ?? null : null,
         taken_at: status === 'taken' ? new Date().toISOString() : null,
       },
       { onConflict: 'substance_id,scheduled_date' },

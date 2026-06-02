@@ -6,10 +6,14 @@ export interface AppApi {
   taken: Set<string>;
   /** All loaded dose logs, keyed `${subId}|${iso}` (for history, the week view, and stats). */
   logs: LogMap;
+  /** Injection site per logged dose, keyed `${subId}|${iso}`. */
+  sites: Record<string, string>;
   /** Status of a dose on a given date, if logged. */
   statusOf: (subId: string, iso: string) => DoseStatus | undefined;
   /** Set (or clear, with null) a dose's status on a given date — adjusts remaining + persists. */
-  setStatus: (subId: string, iso: string, status: DoseStatus | null) => void;
+  setStatus: (subId: string, iso: string, status: DoseStatus | null, site?: string | null) => void;
+  /** Most recent injection site logged for a substance (for rotation defaults). */
+  lastSiteFor: (subId: string) => string | undefined;
   /** Toggle a today-event id (e.g. "reta-today"). */
   toggle: (eid: string) => void;
   /** Open a substance's detail screen. */
@@ -17,8 +21,8 @@ export interface AppApi {
   /** Open the log sheet, optionally pre-selecting a substance. */
   log: (subId?: string) => void;
   openLog: () => void;
-  /** Confirm today's dose for a substance. */
-  confirmLog: (subId: string) => void;
+  /** Confirm today's dose for a substance (optionally recording an injection site). */
+  confirmLog: (subId: string, site?: string | null) => void;
   skipLog: (subId?: string) => void;
   /** Add a new vial/substance to the inventory. */
   addSubstance: (s: Substance) => void;

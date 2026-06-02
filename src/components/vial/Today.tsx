@@ -2,8 +2,8 @@
 
 import type { ReactNode } from 'react';
 import {
-  doseLabel, daysLeft, stockStatus, expiryStatus, daysUntil, fillPct, fmtExpiry,
-  todayName, greeting, type Substance,
+  doseLabelOn, daysLeft, stockStatus, expiryStatus, daysUntil, fillPct, fmtExpiry,
+  greeting, isDueOn, isoDate, type Substance,
 } from '@/lib/substances';
 import { Monogram, Label, Icon, VialFill } from './ui';
 import { AdherencePanel } from './Stats';
@@ -67,13 +67,13 @@ function AlertRow({ icon, tone, title, detail, onClick }: { icon: ReactNode; ton
 }
 
 export function TodayScreen({ app }: { app: AppApi }) {
-  const TODAY_NAME = todayName();
   const now = new Date();
+  const todayISO = isoDate(now);
   const dateLabel = `${now.toLocaleDateString('en-US', { weekday: 'short' })} · ${now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
   const events: Ev[] = app.substances
-    .filter((s) => s.days.includes(TODAY_NAME))
-    .map((s) => ({ id: s.id + '-today', subId: s.id, name: s.name, hue: s.hue, dose: doseLabel(s), time: s.time, period: s.period, route: s.route }))
+    .filter((s) => isDueOn(s, todayISO))
+    .map((s) => ({ id: s.id + '-today', subId: s.id, name: s.name, hue: s.hue, dose: doseLabelOn(s, todayISO), time: s.time, period: s.period, route: s.route }))
     .sort((a, b) => a.time.localeCompare(b.time));
 
   const total = events.length;

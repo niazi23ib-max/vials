@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { doseDecrement, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
+import { doseDecrementOn, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
 import { useSession } from '@/lib/useSession';
@@ -68,6 +68,7 @@ export function VialApp() {
 
   const [subs, setSubs] = useState<Substance[]>([]);
   const [logs, setLogs] = useState<LogMap>({});
+  const [sites, setSites] = useState<Record<string, string>>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -83,16 +84,21 @@ export function VialApp() {
     const [s, rows] = await Promise.all([db.listSubstances(), db.listLogs(isoDate(since))]);
     setSubs(s);
     const map: LogMap = {};
+    const siteMap: Record<string, string> = {};
     rows.forEach((l) => {
-      map[logKey(l.substance_id, l.scheduled_date)] = l.status;
+      const k = logKey(l.substance_id, l.scheduled_date);
+      map[k] = l.status;
+      if (l.site) siteMap[k] = l.site;
     });
     setLogs(map);
+    setSites(siteMap);
   }, []);
 
   useEffect(() => {
     if (!user) {
       setSubs([]);
       setLogs({});
+      setSites({});
       setDataLoading(false);
       return;
     }
@@ -129,14 +135,15 @@ export function VialApp() {
 
   // Set/clear a dose's status on any date. Only "taken" consumes from the vial,
   // so flipping taken⇄(skipped|cleared) restores or re-deducts one dose.
-  async function setStatus(subId: string, iso: string, status: DoseStatus | null) {
+  async function setStatus(subId: string, iso: string, status: DoseStatus | null, site?: string | null) {
     const sub = subs.find((s) => s.id === subId);
     if (!sub) return;
     const key = logKey(subId, iso);
     const prev = logs[key];
-    if (prev === (status ?? undefined)) return;
+    const siteChanged = status === 'taken' && site != null && sites[key] !== site;
+    if (prev === (status ?? undefined) && !siteChanged) return;
 
-    const dec = doseDecrement(sub);
+    const dec = doseDecrementOn(sub, iso);
     const wasTaken = prev === 'taken';
     const willTake = status === 'taken';
     let newRemaining = sub.remaining;
@@ -151,11 +158,17 @@ export function VialApp() {
       else n[key] = status;
       return n;
     });
+    setSites((prevMap) => {
+      const n = { ...prevMap };
+      if (status === 'taken' && site) n[key] = site;
+      else delete n[key];
+      return n;
+    });
     if (remainingChanged) setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
 
     try {
       if (status === null) await db.deleteLog(subId, iso);
-      else await db.setLog(subId, iso, status);
+      else await db.setLog(subId, iso, status, site);
       if (remainingChanged) await db.updateRemaining(subId, newRemaining);
     } catch {
       loadData(); // revert to server truth on failure
@@ -179,13 +192,24 @@ export function VialApp() {
   for (const sub of subs) {
     if (statusOf(sub.id, todayISO) === 'taken') takenToday.add(sub.id + '-today');
   }
+  const lastSiteFor = (subId: string): string | undefined => {
+    let bestIso = '';
+    let best: string | undefined;
+    for (const [k, v] of Object.entries(sites)) {
+      const bar = k.indexOf('|');
+      if (k.slice(0, bar) === subId && k.slice(bar + 1) > bestIso) { bestIso = k.slice(bar + 1); best = v; }
+    }
+    return best;
+  };
 
   const app: AppApi = {
     substances: subs,
     taken: takenToday,
     logs,
+    sites,
     statusOf,
     setStatus,
+    lastSiteFor,
     toggle: (eid) => {
       const subId = eid.replace('-today', '');
       setStatus(subId, todayISO, statusOf(subId, todayISO) === 'taken' ? null : 'taken');
@@ -193,7 +217,7 @@ export function VialApp() {
     open: (subId) => setDetailId(subId),
     log: (subId) => setSheet({ open: true, subId: subId ?? null }),
     openLog: () => setSheet({ open: true, subId: null }),
-    confirmLog: (subId) => setStatus(subId, todayISO, 'taken'),
+    confirmLog: (subId, site) => setStatus(subId, todayISO, 'taken', site),
     skipLog: (subId) => { if (subId) setStatus(subId, todayISO, 'skipped'); },
     addSubstance: async (sub) => {
       const created = await db.createSubstance(sub);

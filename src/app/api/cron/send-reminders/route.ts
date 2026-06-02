@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
-import { doseLabel, type Substance } from '@/lib/substances';
+import { isDueOn, doseLabelOn, type Substance, type TitrationStep } from '@/lib/substances';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,8 +21,33 @@ const CRON_SECRET = process.env.CRON_SECRET ?? '';
 
 const WINDOW_MIN = 5; // catch-up window so a delayed tick still fires (dedupe prevents repeats)
 
-interface SubRow { id: string; user_id: string; name: string; route: string; days: string[] | null; time: string | null; unit: string; dose_mcg: number | string; caps_per_dose: number | string | null; }
+interface SubRow {
+  id: string; user_id: string; name: string; route: string;
+  unit: string; dose_mcg: number | string; caps_per_dose: number | string | null;
+  schedule_kind: string | null; days: string[] | null;
+  interval_days: number | string | null; cycle_on: number | string | null; cycle_off: number | string | null;
+  anchor_date: string | null; course_start: string | null; course_weeks: number | string | null;
+  created_at: string | null; time: string | null; titration: TitrationStep[] | null;
+}
 interface PushRow { user_id: string; endpoint: string; p256dh: string; auth: string; tz: string; }
+
+const SUB_COLS =
+  'id,user_id,name,route,unit,dose_mcg,caps_per_dose,schedule_kind,days,interval_days,cycle_on,cycle_off,anchor_date,course_start,course_weeks,created_at,time,titration';
+
+/** Map a DB row to a Substance for the shared scheduling/dose helpers (unused fields defaulted). */
+function toSub(r: SubRow): Substance {
+  return {
+    id: r.id, name: r.name, category: '', sub: '', route: r.route, hue: 0,
+    vialMg: 0, bacMl: 0, count: 0, capsPerDose: Number(r.caps_per_dose) || 0,
+    doseMcg: Number(r.dose_mcg) || 0, unit: (r.unit as Substance['unit']) || 'mcg',
+    every: 'day', scheduleKind: (r.schedule_kind as Substance['scheduleKind']) || 'weekly',
+    days: r.days ?? [], intervalDays: Number(r.interval_days) || 0,
+    cycleOn: Number(r.cycle_on) || 0, cycleOff: Number(r.cycle_off) || 0,
+    anchor: r.anchor_date ?? '', courseStart: r.course_start ?? '', courseWeeks: Number(r.course_weeks) || 0,
+    time: r.time ?? '', period: 'AM', remaining: 0, expiry: '', pricePerVial: 0, lot: '',
+    titration: r.titration ?? null, created: r.created_at ? r.created_at.slice(0, 10) : '',
+  };
+}
 
 /** {weekday: Mon..Sun, date: YYYY-MM-DD, minutes: minute-of-day} for `now` in `tz`. */
 function localParts(now: Date, tz: string) {
@@ -75,28 +100,24 @@ export async function GET(req: Request) {
   }
 
   const userIds = [...byUser.keys()];
-  const { data: subsAll } = await db
-    .from('substances')
-    .select('id,user_id,name,route,days,time,unit,dose_mcg,caps_per_dose')
-    .in('user_id', userIds);
-  const substances = (subsAll as SubRow[] | null) ?? [];
+  const { data: subsAll } = await db.from('substances').select(SUB_COLS).in('user_id', userIds);
+  const substances = ((subsAll as SubRow[] | null) ?? []).map((r) => ({ user_id: r.user_id, sub: toSub(r) }));
 
-  type Due = { user_id: string; sub: SubRow; date: string };
+  type Due = { user_id: string; sub: Substance; date: string };
   const due: Due[] = [];
-  for (const s of substances) {
-    const u = byUser.get(s.user_id);
+  for (const { user_id, sub } of substances) {
+    const u = byUser.get(user_id);
     if (!u) continue;
-    const dm = doseMinutes(s.time);
+    const dm = doseMinutes(sub.time);
     if (dm === null) continue;
-    const days = s.days ?? [];
     const t = localParts(now, u.tz);
-    if (days.includes(t.weekday) && t.minutes >= dm && t.minutes <= dm + WINDOW_MIN) {
-      due.push({ user_id: s.user_id, sub: s, date: t.date }); // at/just-after dose time today
+    if (isDueOn(sub, t.date) && t.minutes >= dm && t.minutes <= dm + WINDOW_MIN) {
+      due.push({ user_id, sub, date: t.date }); // at/just-after dose time today
     } else if (t.minutes <= WINDOW_MIN) {
       // Just after local midnight: catch a late dose carried over from yesterday.
       const y = localParts(new Date(now.getTime() - 86_400_000), u.tz);
-      if (days.includes(y.weekday) && t.minutes + 1440 >= dm && t.minutes + 1440 <= dm + WINDOW_MIN) {
-        due.push({ user_id: s.user_id, sub: s, date: y.date });
+      if (isDueOn(sub, y.date) && t.minutes + 1440 >= dm && t.minutes + 1440 <= dm + WINDOW_MIN) {
+        due.push({ user_id, sub, date: y.date });
       }
     }
   }
@@ -123,7 +144,7 @@ export async function GET(req: Request) {
     const { error: claimErr } = await db.from('reminder_log').insert({ user_id: d.user_id, substance_id: d.sub.id, scheduled_date: d.date });
     if (claimErr) continue;
 
-    const label = doseLabel({ route: d.sub.route, unit: d.sub.unit as Substance['unit'], doseMcg: Number(d.sub.dose_mcg) || 0, capsPerDose: Number(d.sub.caps_per_dose) || 0 } as Substance);
+    const label = doseLabelOn(d.sub, d.date);
     const payload = JSON.stringify({ title: `Time for ${d.sub.name}`, body: `${label} · ${d.sub.route}`, url: '/', tag: `dose-${d.sub.id}-${d.date}` });
     const devices = byUser.get(d.user_id)?.devices ?? [];
     for (const dev of devices) {

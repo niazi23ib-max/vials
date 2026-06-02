@@ -1,8 +1,9 @@
 'use client';
 
 import {
-  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabel, recon, ok, DAY_ORDER,
-  substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, type Substance,
+  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabelOn, recon, ok, DAY_ORDER,
+  substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, effectiveDoseMcg, isoDate,
+  scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
@@ -19,12 +20,15 @@ function KV({ label, value, tone }: { label: string; value: string; tone?: strin
 export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi; onBack: () => void }) {
   const s = sub;
   const form = substanceForm(s);
+  const todayISO = isoDate(new Date());
   const history = doseHistory(s, app.logs, 6);
-  const r = form === 'inject' ? recon(s.vialMg, s.bacMl, s.doseMcg) : null;
+  const r = form === 'inject' ? recon(s.vialMg, s.bacMl, effectiveDoseMcg(s, todayISO)) : null;
   const stock = stockStatus(s);
   const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
   const dpc = dosesPerContainer(s);
   const costPerDose = dpc > 0 ? s.pricePerVial / dpc : 0;
+  const course = courseInfo(s);
+  const titrating = hasTitrationSchedule(s);
 
   return (
     <div style={{ minHeight: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -70,8 +74,8 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-          <KV label="Dose" value={doseLabel(s)} />
-          <KV label="Frequency" value={s.days.length === 7 ? 'Daily' : `${s.days.length}× / week`} />
+          <KV label={titrating ? 'Dose · now' : 'Dose'} value={doseLabelOn(s, todayISO)} tone={titrating ? 'var(--amber)' : undefined} />
+          <KV label="Frequency" value={scheduleLabel(s)} />
           {r ? (
             <>
               <KV label="Draw (U-100)" value={`${r.units.toFixed(1)} units`} />
@@ -94,15 +98,23 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
 
         <div style={{ marginTop: 26 }}>
           <Label>Schedule</Label>
-          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-            {DAY_ORDER.map((d) => {
-              const on = s.days.includes(d);
-              return (
-                <div key={d} style={{ flex: 1, textAlign: 'center', padding: '9px 0', borderRadius: 10, fontFamily: 'var(--mono)', fontSize: 11, background: on ? ok(0.28, 0.05, s.hue) : 'rgba(255,255,255,0.02)', border: `1px solid ${on ? ok(0.4, 0.07, s.hue) : 'var(--line)'}`, color: on ? ok(0.82, 0.11, s.hue) : 'var(--text-faint)' }}>{d[0]}</div>
-              );
-            })}
+          {s.scheduleKind === 'weekly' ? (
+            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+              {DAY_ORDER.map((d) => {
+                const on = s.days.includes(d);
+                return (
+                  <div key={d} style={{ flex: 1, textAlign: 'center', padding: '9px 0', borderRadius: 10, fontFamily: 'var(--mono)', fontSize: 11, background: on ? ok(0.28, 0.05, s.hue) : 'rgba(255,255,255,0.02)', border: `1px solid ${on ? ok(0.4, 0.07, s.hue) : 'var(--line)'}`, color: on ? ok(0.82, 0.11, s.hue) : 'var(--text-faint)' }}>{d[0]}</div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--text)' }}>{scheduleLabel(s)}</div>
+          )}
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)', marginTop: 10, lineHeight: 1.6 }}>
+            {s.time} {s.period} · {s.route}
+            {course && <> · <span style={{ color: 'var(--amber)' }}>{course.ended ? 'Course ended' : `Week ${course.week}${course.total ? ` of ${course.total}` : ''}`}</span></>}
+            {form === 'inject' && <> · next site {nextSite(app.lastSiteFor(s.id))}</>}
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)', marginTop: 10 }}>{s.time} {s.period} · {s.route}</div>
         </div>
 
         <div style={{ marginTop: 26 }}>
@@ -112,7 +124,10 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
               <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-faint)', padding: '10px 0' }}>No scheduled doses yet.</div>
             ) : history.map((h) => {
               const color = h.status === 'taken' ? 'var(--green)' : h.status === 'skipped' ? 'var(--amber)' : h.status === 'pending' ? 'var(--text-faint)' : 'var(--red)';
-              const right = h.status === 'taken' ? doseLabel(s) : h.status === 'skipped' ? 'Skipped' : h.status === 'pending' ? 'Due today' : 'Missed';
+              const site = app.sites[logKey(s.id, h.iso)];
+              const right = h.status === 'taken'
+                ? doseLabelOn(s, h.iso) + (site ? ` · ${site}` : '')
+                : h.status === 'skipped' ? 'Skipped' : h.status === 'pending' ? 'Due today' : 'Missed';
               return (
                 <div key={h.iso} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, opacity: h.status === 'taken' ? 1 : 0.7 }} />

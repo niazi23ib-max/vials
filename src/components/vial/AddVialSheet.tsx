@@ -2,8 +2,8 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf,
-  type Substance,
+  recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate,
+  type Substance, type ScheduleKind,
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
 import type { AppApi } from './types';
@@ -66,6 +66,12 @@ export function AddVialSheet({
   const [doseUnit, setDoseUnit] = useState<DoseUnit>('mcg');
   const [amountLeft, setAmountLeft] = useState(''); // edit: mg (inject/dose) or capsules (oral)
   const [days, setDays] = useState<string[]>([...DAY_ORDER]);
+  const [scheduleKind, setScheduleKind] = useState<ScheduleKind>('weekly');
+  const [intervalDays, setIntervalDays] = useState('2');
+  const [cycleOn, setCycleOn] = useState('5');
+  const [cycleOff, setCycleOff] = useState('2');
+  const [startDate, setStartDate] = useState(''); // anchor + course start (interval/cycle)
+  const [courseWeeks, setCourseWeeks] = useState(''); // optional course length
   const [time, setTime] = useState('08:00');
   const [price, setPrice] = useState('');
   const [expiry, setExpiry] = useState('');
@@ -97,6 +103,12 @@ export function AddVialSheet({
       );
       setAmountLeft(String(f === 'oral' ? editing.remaining : +(editing.remaining / 1000).toFixed(4)));
       setDays(editing.days.length ? [...editing.days] : []);
+      setScheduleKind(editing.scheduleKind || 'weekly');
+      setIntervalDays(String(editing.intervalDays || 2));
+      setCycleOn(String(editing.cycleOn || 5));
+      setCycleOff(String(editing.cycleOff || 2));
+      setStartDate(editing.anchor || editing.courseStart || editing.created || isoDate(new Date()));
+      setCourseWeeks(editing.courseWeeks ? String(editing.courseWeeks) : '');
       setTime(editing.time || '08:00');
       setPrice(editing.pricePerVial ? String(editing.pricePerVial) : '');
       setExpiry(editing.expiry || defaultExpiryISO());
@@ -114,6 +126,12 @@ export function AddVialSheet({
       setDoseUnit('mcg');
       setAmountLeft('');
       setDays([...DAY_ORDER]);
+      setScheduleKind('weekly');
+      setIntervalDays('2');
+      setCycleOn('5');
+      setCycleOff('2');
+      setStartDate(isoDate(new Date()));
+      setCourseWeeks('');
       setTime('08:00');
       setPrice('');
       setExpiry(defaultExpiryISO());
@@ -157,7 +175,9 @@ export function AddVialSheet({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return setError('Give it a name.');
-    if (days.length === 0) return setError('Pick at least one dosing day.');
+    if (scheduleKind === 'weekly' && days.length === 0) return setError('Pick at least one dosing day.');
+    if (scheduleKind === 'interval' && !(Number(intervalDays) >= 1)) return setError('Enter how many days between doses.');
+    if (scheduleKind === 'cycle' && !(Number(cycleOn) >= 1)) return setError('Enter at least 1 day “on”.');
     if (form === 'oral') {
       if (!(cnt > 0)) return setError('Enter how many capsules/tablets are in the container.');
       if (!(doseRaw > 0)) return setError('Enter the strength per capsule.');
@@ -168,13 +188,26 @@ export function AddVialSheet({
     }
 
     const hour = parseInt((time || '08:00').split(':')[0] || '8', 10);
+    const ivl = Math.max(1, Math.floor(Number(intervalDays) || 1));
+    const con = Math.max(1, Math.floor(Number(cycleOn) || 1));
+    const coff = Math.max(0, Math.floor(Number(cycleOff) || 0));
+    const cw = Math.max(0, Math.floor(Number(courseWeeks) || 0));
+    const anchorISO = startDate || isoDate(new Date());
+    const selDays = DAY_ORDER.filter((d) => days.includes(d));
     const common = {
       name: name.trim(),
       category,
       sub: klass.trim() || category,
       route,
-      every: (days.length >= 7 ? 'day' : days.length > 0 ? 'wk-days' : 'day') as Substance['every'],
-      days: DAY_ORDER.filter((d) => days.includes(d)),
+      every: (selDays.length >= 7 ? 'day' : selDays.length > 0 ? 'wk-days' : 'day') as Substance['every'],
+      scheduleKind,
+      days: scheduleKind === 'weekly' ? selDays : [],
+      intervalDays: scheduleKind === 'interval' ? ivl : 0,
+      cycleOn: scheduleKind === 'cycle' ? con : 0,
+      cycleOff: scheduleKind === 'cycle' ? coff : 0,
+      anchor: scheduleKind === 'weekly' ? '' : anchorISO,
+      courseStart: cw > 0 ? (scheduleKind === 'weekly' ? (editing?.courseStart || anchorISO) : anchorISO) : '',
+      courseWeeks: cw,
       time: time || '08:00',
       period: (hour < 12 ? 'AM' : 'PM') as 'AM' | 'PM',
       expiry: expiry || defaultExpiryISO(),
@@ -330,19 +363,72 @@ export function AddVialSheet({
           </div>
         )}
 
-        <Fld label="Dosing days">
-          <div style={{ display: 'flex', gap: 6 }}>
-            {DAY_ORDER.map((d) => {
-              const on = days.includes(d);
-              return (
-                <button key={d} type="button" onClick={() => toggleDay(d)}
-                  style={{ flex: 1, padding: '10px 0', borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 12, background: on ? 'var(--amber)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'var(--amber)' : 'var(--line)'}`, color: on ? 'var(--bg)' : 'var(--text-faint)' }}>
-                  {d[0]}
-                </button>
-              );
-            })}
+        <Fld label="Schedule">
+          <div style={{ display: 'flex', gap: 4, padding: 4, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 12 }}>
+            {([['weekly', 'Weekly'], ['interval', 'Interval'], ['cycle', 'Cycle']] as const).map(([k, lbl]) => (
+              <button key={k} type="button" onClick={() => setScheduleKind(k)}
+                style={{ flex: 1, padding: '8px 0', borderRadius: 9, cursor: 'pointer', border: 'none', background: scheduleKind === k ? 'var(--text)' : 'transparent', color: scheduleKind === k ? 'var(--bg)' : 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>
+                {lbl}
+              </button>
+            ))}
           </div>
+
+          {scheduleKind === 'weekly' && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+              {DAY_ORDER.map((d) => {
+                const on = days.includes(d);
+                return (
+                  <button key={d} type="button" onClick={() => toggleDay(d)}
+                    style={{ flex: 1, padding: '10px 0', borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 12, background: on ? 'var(--amber)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'var(--amber)' : 'var(--line)'}`, color: on ? 'var(--bg)' : 'var(--text-faint)' }}>
+                    {d[0]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {scheduleKind === 'interval' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-dim)' }}>Every</span>
+              <input className="vlf" style={{ ...inputStyle, width: 76, textAlign: 'center' }} type="number" inputMode="numeric" step="1" min="1" value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)} />
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text-dim)' }}>days</span>
+            </div>
+          )}
+
+          {scheduleKind === 'cycle' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <input className="vlf" style={{ ...inputStyle, width: 64, textAlign: 'center' }} type="number" inputMode="numeric" step="1" min="1" value={cycleOn} onChange={(e) => setCycleOn(e.target.value)} />
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-dim)' }}>on ·</span>
+              <input className="vlf" style={{ ...inputStyle, width: 64, textAlign: 'center' }} type="number" inputMode="numeric" step="1" min="0" value={cycleOff} onChange={(e) => setCycleOff(e.target.value)} />
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-dim)' }}>off</span>
+            </div>
+          )}
         </Fld>
+
+        {scheduleKind === 'weekly' ? (
+          <Fld label="Course length (optional)">
+            <div style={{ position: 'relative' }}>
+              <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="0" value={courseWeeks} onChange={(e) => setCourseWeeks(e.target.value)} placeholder="Ongoing" />
+              <span style={adorn}>wks</span>
+            </div>
+          </Fld>
+        ) : (
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Fld label="Start date">
+                <input className="vlf" style={inputStyle} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </Fld>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Fld label="Course (wks)">
+                <div style={{ position: 'relative' }}>
+                  <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="0" value={courseWeeks} onChange={(e) => setCourseWeeks(e.target.value)} placeholder="Ongoing" />
+                  <span style={adorn}>wks</span>
+                </div>
+              </Fld>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>

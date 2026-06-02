@@ -11,9 +11,12 @@ export interface TitrationStep {
   label: string;
   mcg: number;
   current?: boolean;
+  /** ISO date this step takes effect. When set, the current step is derived by date. */
+  start?: string;
 }
 
 export type Form = 'inject' | 'oral' | 'dose';
+export type ScheduleKind = 'weekly' | 'interval' | 'cycle';
 
 export const CATEGORIES = ['Peptide', 'Medication', 'Vitamin', 'Supplement', 'Other'] as const;
 
@@ -55,7 +58,20 @@ export interface Substance {
   doseMcg: number;
   unit: 'mg' | 'mcg' | 'IU';
   every: 'week' | 'wk-days' | 'day';
+  /** How dosing days are computed. */
+  scheduleKind: ScheduleKind;
+  /** weekly: the dosing weekdays (Mon…Sun). */
   days: string[];
+  /** interval: dose every N days from `anchor`. */
+  intervalDays: number;
+  /** cycle: N days on, then M days off, repeating from `anchor`. */
+  cycleOn: number;
+  cycleOff: number;
+  /** interval/cycle reference date (ISO). Falls back to `created`. */
+  anchor: string;
+  /** optional course window: first dosing day (ISO) and length in weeks (0 = ongoing). */
+  courseStart: string;
+  courseWeeks: number;
   time: string;
   period: 'AM' | 'PM';
   /** amount left — mcg for inject/dose, capsules for oral. */
@@ -87,6 +103,94 @@ export function todayName(now = new Date()): string {
 /** Weekday name (Mon…Sun) for an ISO date string. */
 export function weekdayOf(iso: string): string {
   return DAY_ORDER[(new Date(iso + 'T00:00:00').getDay() + 6) % 7];
+}
+
+// ── Scheduling (weekly / interval / cycle + optional course) ──────
+const MS_DAY = 86_400_000;
+/** Whole days from ISO `a` to ISO `b` (negative if b is before a). */
+export function daysBetween(a: string, b: string): number {
+  return Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / MS_DAY);
+}
+export function addDaysISO(iso: string, n: number): string {
+  return isoDate(new Date(new Date(iso + 'T00:00:00').getTime() + n * MS_DAY));
+}
+/** Reference date for interval/cycle math. */
+export const anchorOf = (s: Substance): string => s.anchor || s.courseStart || s.created || '';
+/** Last dosing date of a fixed-length course, or '' if ongoing/none. */
+export function courseEndISO(s: Substance): string {
+  if (!s.courseStart || !(s.courseWeeks > 0)) return '';
+  return addDaysISO(s.courseStart, s.courseWeeks * 7 - 1);
+}
+
+/** Whether a dose is scheduled on ISO date `iso` (pattern + course + created bounds). */
+export function isDueOn(s: Substance, iso: string): boolean {
+  if (s.created && iso < s.created) return false;
+  if (s.courseStart && iso < s.courseStart) return false;
+  const end = courseEndISO(s);
+  if (end && iso > end) return false;
+
+  if (s.scheduleKind === 'interval') {
+    const n = s.intervalDays > 0 ? s.intervalDays : 1;
+    const a = anchorOf(s);
+    if (!a) return false;
+    const d = daysBetween(a, iso);
+    return d >= 0 && d % n === 0;
+  }
+  if (s.scheduleKind === 'cycle') {
+    const on = s.cycleOn > 0 ? s.cycleOn : 1;
+    const off = s.cycleOff >= 0 ? s.cycleOff : 0;
+    const a = anchorOf(s);
+    if (!a) return false;
+    const d = daysBetween(a, iso);
+    if (d < 0) return false;
+    return d % (on + off) < on;
+  }
+  return s.days.includes(weekdayOf(iso));
+}
+
+/** Average doses per week implied by the schedule (for runway math). */
+export function dosesPerWeek(s: Substance): number {
+  if (s.scheduleKind === 'interval') return s.intervalDays > 0 ? 7 / s.intervalDays : 7;
+  if (s.scheduleKind === 'cycle') {
+    const on = s.cycleOn > 0 ? s.cycleOn : 0;
+    const period = on + (s.cycleOff >= 0 ? s.cycleOff : 0);
+    return period > 0 ? (on * 7) / period : 7;
+  }
+  return s.days.length;
+}
+
+export interface CourseInfo { active: boolean; week: number; total: number; ended: boolean; }
+/** "Week X of Y" progress for a course, or null if no course set. */
+export function courseInfo(s: Substance, now = new Date()): CourseInfo | null {
+  if (!s.courseStart) return null;
+  const today = isoDate(now);
+  const total = s.courseWeeks > 0 ? s.courseWeeks : 0;
+  const end = courseEndISO(s);
+  const ended = !!end && today > end;
+  const started = today >= s.courseStart;
+  const week = started ? Math.floor(daysBetween(s.courseStart, today) / 7) + 1 : 0;
+  return { active: started && !ended, week: Math.max(1, week), total, ended };
+}
+
+/** Human label for the schedule, e.g. "Daily", "3× / week", "Every 3 days", "5 on / 2 off". */
+export function scheduleLabel(s: Substance): string {
+  if (s.scheduleKind === 'interval') {
+    const n = s.intervalDays > 0 ? s.intervalDays : 1;
+    return n === 1 ? 'Daily' : n === 2 ? 'Every other day' : `Every ${n} days`;
+  }
+  if (s.scheduleKind === 'cycle') return `${s.cycleOn} on / ${s.cycleOff} off`;
+  return s.days.length === 7 ? 'Daily' : `${s.days.length}× / week`;
+}
+
+/** Injection sites for rotation (subq/IM). */
+export const INJECTION_SITES = [
+  'Abdomen L', 'Abdomen R', 'Thigh L', 'Thigh R', 'Delt L', 'Delt R', 'Glute L', 'Glute R',
+] as const;
+/** Next site after the last-used one (simple rotation). */
+export function nextSite(lastSite: string | undefined): string {
+  if (!lastSite) return INJECTION_SITES[0];
+  const i = INJECTION_SITES.indexOf(lastSite as (typeof INJECTION_SITES)[number]);
+  return INJECTION_SITES[(i + 1) % INJECTION_SITES.length];
 }
 
 export interface WeekDay {
@@ -159,8 +263,39 @@ export function dosesPerContainer(s: Substance): number {
 }
 
 export function daysLeft(s: Substance): number {
-  if (s.days.length <= 0) return 999;
-  return Math.floor((dosesLeft(s) * 7) / s.days.length);
+  const dpw = dosesPerWeek(s);
+  if (dpw <= 0) return 999;
+  return Math.floor((dosesLeft(s) * 7) / dpw);
+}
+
+/** Effective dose (mcg) on a date, following the titration ramp if dates are set. */
+export function effectiveDoseMcg(s: Substance, iso: string): number {
+  const steps = s.titration;
+  if (!steps || !steps.length) return s.doseMcg;
+  const dated = steps.filter((t) => t.start);
+  if (dated.length) {
+    const reached = dated.filter((t) => t.start! <= iso).sort((a, b) => (a.start! < b.start! ? 1 : -1));
+    return reached.length ? reached[0].mcg : s.doseMcg; // before the first step → base dose
+  }
+  const cur = steps.find((t) => t.current);
+  return cur ? cur.mcg : s.doseMcg;
+}
+
+/** Whether titration step dates make the dose vary over time. */
+export function hasTitrationSchedule(s: Substance): boolean {
+  return !!s.titration && s.titration.some((t) => t.start);
+}
+
+/** Dose label on a specific date (follows titration for inject/dose forms). */
+export function doseLabelOn(s: Substance, iso: string): string {
+  if (formOf(s.route) === 'oral') return doseLabel(s);
+  const mcg = effectiveDoseMcg(s, iso);
+  return s.unit === 'mg' ? `${+(mcg / 1000).toFixed(4)} mg` : `${mcg} mcg`;
+}
+
+/** Decrement for a dose logged on a specific date (titration-aware for inject/dose). */
+export function doseDecrementOn(s: Substance, iso: string): number {
+  return formOf(s.route) === 'oral' ? s.capsPerDose || 1 : effectiveDoseMcg(s, iso);
 }
 
 export function daysUntil(dateStr: string, now = new Date()): number {
@@ -230,21 +365,17 @@ export const logKey = (subId: string, iso: string) => `${subId}|${iso}`;
 
 /** Most recent dates this substance is scheduled (today-or-earlier, on/after it was added), newest first. */
 export function recentScheduledDates(sub: Substance, count: number, now = new Date()): string[] {
-  if (!sub.days.length) return [];
-  const floor = sub.created || '';
+  const floor = sub.courseStart || sub.created || '';
   const out: string[] = [];
   const d = new Date(now);
   for (let i = 0; i < 730 && out.length < count; i++) {
     const iso = isoDate(d);
     if (floor && iso < floor) break;
-    if (sub.days.includes(DAY_ORDER[(d.getDay() + 6) % 7])) out.push(iso);
+    if (isDueOn(sub, iso)) out.push(iso);
     d.setDate(d.getDate() - 1);
   }
   return out;
 }
-
-/** Whether a substance is "active" (added on/before) a given date. */
-const activeOn = (s: Substance, iso: string) => !s.created || iso >= s.created;
 
 export type HistoryStatus = 'taken' | 'skipped' | 'missed' | 'pending';
 export interface HistoryEntry {
@@ -279,9 +410,8 @@ export function adherence(subs: Substance[], logs: LogMap, days: number, now = n
   const d = new Date(now);
   for (let i = 0; i < days; i++) {
     const iso = isoDate(d);
-    const name = DAY_ORDER[(d.getDay() + 6) % 7];
     for (const sub of subs) {
-      if (!sub.days.includes(name) || !activeOn(sub, iso)) continue;
+      if (!isDueOn(sub, iso)) continue;
       const s = logs[logKey(sub.id, iso)];
       if (s === 'taken') taken++;
       else if (s === 'skipped') skipped++;
@@ -300,8 +430,7 @@ export function streak(subs: Substance[], logs: LogMap, now = new Date()): numbe
   const d = new Date(now);
   for (let i = 0; i < 730; i++) {
     const iso = isoDate(d);
-    const name = DAY_ORDER[(d.getDay() + 6) % 7];
-    const due = subs.filter((s) => s.days.includes(name) && activeOn(s, iso));
+    const due = subs.filter((s) => isDueOn(s, iso));
     d.setDate(d.getDate() - 1);
     if (!due.length) continue; // rest day — doesn't break or extend the streak
     const statuses = due.map((s) => logs[logKey(s.id, iso)]);
@@ -320,7 +449,7 @@ export type DayStatus = 'none' | 'done' | 'partial' | 'missed' | 'pending' | 'fu
 export function dayStatus(subs: Substance[], logs: LogMap, iso: string, now = new Date()): DayStatus {
   const todayIso = isoDate(now);
   if (iso > todayIso) return 'future';
-  const due = subs.filter((s) => s.days.includes(weekdayOf(iso)) && activeOn(s, iso));
+  const due = subs.filter((s) => isDueOn(s, iso));
   if (!due.length) return 'none';
   const st = due.map((s) => logs[logKey(s.id, iso)]);
   const taken = st.filter((x) => x === 'taken').length;

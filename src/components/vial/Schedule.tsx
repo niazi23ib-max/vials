@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { currentWeek, doseLabel, ok, todayName, isoDate, type Substance } from '@/lib/substances';
+import { currentWeek, doseLabelOn, ok, todayName, isoDate, isDueOn, type Substance } from '@/lib/substances';
 import { Label, Monogram, Icon } from './ui';
 import type { AppApi } from './types';
 
 interface Ev { id: string; subId: string; name: string; hue: number; dose: string; time: string; period: string; route: string }
 
-function dayEvents(substances: Substance[], dayName: string): Ev[] {
+function dayEvents(substances: Substance[], iso: string): Ev[] {
   return substances
-    .filter((s) => s.days.includes(dayName))
-    .map((s) => ({ id: s.id + '-' + dayName, subId: s.id, name: s.name, hue: s.hue, dose: doseLabel(s), time: s.time, period: s.period, route: s.route }))
+    .filter((s) => isDueOn(s, iso))
+    .map((s) => ({ id: s.id + '-' + iso, subId: s.id, name: s.name, hue: s.hue, dose: doseLabelOn(s, iso), time: s.time, period: s.period, route: s.route }))
     .sort((a, b) => a.time.localeCompare(b.time));
 }
 
@@ -23,9 +23,9 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
   base.setDate(base.getDate() + weekOffset * 7);
   const WEEK = currentWeek(base);
   const selObj = WEEK.find((w) => w.name === sel)!;
-  const events = dayEvents(app.substances, sel);
+  const events = dayEvents(app.substances, selObj.iso);
   const isFuture = selObj.iso > TODAY_ISO;
-  const weekTotal = WEEK.reduce((n, w) => n + dayEvents(app.substances, w.name).length, 0);
+  const weekTotal = WEEK.reduce((n, w) => n + dayEvents(app.substances, w.iso).length, 0);
   const weekTitle = weekOffset === 0 ? 'This week' : weekOffset === -1 ? 'Last week' : weekOffset === 1 ? 'Next week' : `${WEEK[0].mo} ${WEEK[0].d}–${WEEK[6].d}`;
 
   const navBtn = (txt: string, fn: () => void) => (
@@ -48,7 +48,7 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
 
       <div style={{ display: 'flex', gap: 8, padding: '20px 20px 6px', overflowX: 'auto' }}>
         {WEEK.map((w) => {
-          const evs = dayEvents(app.substances, w.name);
+          const evs = dayEvents(app.substances, w.iso);
           const isSel = w.name === sel;
           const isToday = w.iso === TODAY_ISO;
           return (

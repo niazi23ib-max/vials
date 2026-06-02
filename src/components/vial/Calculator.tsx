@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
-import { recon, substanceForm, type Substance } from '@/lib/substances';
+import { recon, substanceForm, isoDate, type Substance } from '@/lib/substances';
 import { Label, Chip } from './ui';
 import type { AppApi } from './types';
 
@@ -123,6 +123,7 @@ interface StepDraft {
   label: string;
   mg: string;
   current: boolean;
+  start: string; // ISO date this step begins (optional)
 }
 
 function TitrationTab({ app }: { app: AppApi }) {
@@ -145,8 +146,8 @@ function TitrationTab({ app }: { app: AppApi }) {
   function startEdit() {
     setSteps(
       s.titration && s.titration.length
-        ? s.titration.map((t) => ({ label: t.label, mg: String(t.mcg / 1000), current: !!t.current }))
-        : [{ label: 'Wk 1–4', mg: '', current: true }],
+        ? s.titration.map((t) => ({ label: t.label, mg: String(t.mcg / 1000), current: !!t.current, start: t.start || '' }))
+        : [{ label: 'Wk 1–4', mg: '', current: true, start: '' }],
     );
     setEditing(true);
   }
@@ -154,7 +155,7 @@ function TitrationTab({ app }: { app: AppApi }) {
   function save() {
     const cleaned = steps
       .filter((st) => st.label.trim() && Number(st.mg) > 0)
-      .map((st) => ({ label: st.label.trim(), mcg: Number(st.mg) * 1000, current: st.current }));
+      .map((st) => ({ label: st.label.trim(), mcg: Number(st.mg) * 1000, current: st.current, ...(st.start ? { start: st.start } : {}) }));
     if (cleaned.length && !cleaned.some((c) => c.current)) cleaned[0].current = true;
     app.updateSubstance(s.id, { ...s, titration: cleaned.length ? cleaned : null });
     setEditing(false);
@@ -173,36 +174,46 @@ function TitrationTab({ app }: { app: AppApi }) {
           <Label>Titration · {s.name}</Label>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
             {steps.map((st, i) => (
-              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input className="vlf" style={{ ...titInput, flex: 1, minWidth: 0 }} placeholder="Label (e.g. Wk 1–4)" value={st.label}
-                  onChange={(e) => setSteps((p) => p.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} />
-                <div style={{ position: 'relative', width: 78, flexShrink: 0 }}>
-                  <input className="vlf" style={{ ...titInput, paddingRight: 26 }} type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={st.mg}
-                    onChange={(e) => setSteps((p) => p.map((x, idx) => (idx === i ? { ...x, mg: e.target.value } : x)))} />
-                  <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', pointerEvents: 'none' }}>mg</span>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, border: '1px solid var(--line)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input className="vlf" style={{ ...titInput, flex: 1, minWidth: 0 }} placeholder="Label (e.g. Wk 1–4)" value={st.label}
+                    onChange={(e) => setSteps((p) => p.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} />
+                  <div style={{ position: 'relative', width: 86, flexShrink: 0 }}>
+                    <input className="vlf" style={{ ...titInput, paddingRight: 28 }} type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={st.mg}
+                      onChange={(e) => setSteps((p) => p.map((x, idx) => (idx === i ? { ...x, mg: e.target.value } : x)))} />
+                    <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', pointerEvents: 'none' }}>mg</span>
+                  </div>
+                  <button type="button" aria-label="Remove step" onClick={() => setSteps((p) => p.filter((_, idx) => idx !== i))}
+                    style={{ flexShrink: 0, width: 32, height: 38, borderRadius: 9, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-faint)', fontSize: 16, cursor: 'pointer' }}>×</button>
                 </div>
-                <button type="button" aria-label="Set as current step" onClick={() => setSteps((p) => p.map((x, idx) => ({ ...x, current: idx === i })))}
-                  style={{ flexShrink: 0, padding: '0 8px', height: 36, borderRadius: 9, border: `1px solid ${st.current ? 'var(--amber)' : 'var(--line)'}`, background: st.current ? 'var(--amber)' : 'transparent', color: st.current ? 'var(--bg)' : 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.08em', cursor: 'pointer' }}>NOW</button>
-                <button type="button" aria-label="Remove step" onClick={() => setSteps((p) => p.filter((_, idx) => idx !== i))}
-                  style={{ flexShrink: 0, width: 30, height: 36, borderRadius: 9, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-faint)', fontSize: 16, cursor: 'pointer' }}>×</button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input className="vlf" style={{ ...titInput, flex: 1, minWidth: 0, color: st.start ? 'var(--text)' : 'var(--text-faint)' }} type="date" value={st.start}
+                    onChange={(e) => setSteps((p) => p.map((x, idx) => (idx === i ? { ...x, start: e.target.value } : x)))} />
+                  <button type="button" aria-label="Set as current step" onClick={() => setSteps((p) => p.map((x, idx) => ({ ...x, current: idx === i })))}
+                    style={{ flexShrink: 0, padding: '0 12px', height: 38, borderRadius: 9, border: `1px solid ${st.current ? 'var(--amber)' : 'var(--line)'}`, background: st.current ? 'var(--amber)' : 'transparent', color: st.current ? 'var(--bg)' : 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.08em', cursor: 'pointer' }}>NOW</button>
+                </div>
               </div>
             ))}
           </div>
-          <button type="button" onClick={() => setSteps((p) => [...p, { label: '', mg: '', current: false }])}
+          <button type="button" onClick={() => setSteps((p) => [...p, { label: '', mg: '', current: false, start: '' }])}
             style={{ marginTop: 10, width: '100%', padding: '10px 0', borderRadius: 10, border: '1px dashed var(--line-strong)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 12, cursor: 'pointer' }}>+ Add step</button>
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button type="button" onClick={() => setEditing(false)} style={{ flex: 1, padding: '13px 0', borderRadius: 14, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
             <button type="button" onClick={save} style={{ flex: 2, padding: '13px 0', borderRadius: 14, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Save schedule</button>
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', padding: '12px 0 0', lineHeight: 1.5 }}>
-            Tap “NOW” to mark your current step. Step doses are in mg. Leave it empty + save to clear the schedule.
+            Add a start date to a step and the dose advances automatically on that date — otherwise tap “NOW” to set the current step. Doses are in mg. Empty + save clears the schedule.
           </div>
         </div>
       ) : s.titration && s.titration.length ? (
         (() => {
           const titration = s.titration!;
           const max = Math.max(...titration.map((t) => t.mcg));
-          const currentIdx = titration.findIndex((t) => t.current);
+          const todayISO = isoDate(new Date());
+          const dated = titration.some((t) => t.start);
+          const currentIdx = dated
+            ? titration.reduce((acc, t, i) => (t.start && t.start <= todayISO ? i : acc), -1)
+            : titration.findIndex((t) => t.current);
           const current = titration[currentIdx];
           const nextStep = titration[currentIdx + 1];
           return (
@@ -215,11 +226,12 @@ function TitrationTab({ app }: { app: AppApi }) {
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 150, marginTop: 18 }}>
                   {titration.map((t, i) => {
                     const h = 30 + (t.mcg / max) * 110;
+                    const isCur = i === currentIdx;
                     return (
                       <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: t.current ? 'var(--amber)' : 'var(--text-dim)' }}>{t.mcg / 1000}<span style={{ fontSize: 9 }}>mg</span></span>
-                        <div style={{ width: '100%', height: h, borderRadius: '8px 8px 0 0', background: t.current ? 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))' : 'rgba(255,255,255,0.06)', border: t.current ? 'none' : '1px solid var(--line)', borderBottom: 'none', position: 'relative' }}>
-                          {t.current && <div style={{ position: 'absolute', top: -38, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', color: 'var(--amber)', whiteSpace: 'nowrap' }}>NOW</div>}
+                        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: isCur ? 'var(--amber)' : 'var(--text-dim)' }}>{t.mcg / 1000}<span style={{ fontSize: 9 }}>mg</span></span>
+                        <div style={{ width: '100%', height: h, borderRadius: '8px 8px 0 0', background: isCur ? 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))' : 'rgba(255,255,255,0.06)', border: isCur ? 'none' : '1px solid var(--line)', borderBottom: 'none', position: 'relative' }}>
+                          {isCur && <div style={{ position: 'absolute', top: -38, left: '50%', transform: 'translateX(-50%)', fontFamily: 'var(--mono)', fontSize: 8, letterSpacing: '0.1em', color: 'var(--amber)', whiteSpace: 'nowrap' }}>NOW</div>}
                         </div>
                         <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-faint)', textAlign: 'center' }}>{t.label}</span>
                       </div>
