@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b24';
+const BUILD = 'b25';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -377,6 +377,9 @@ export function VialApp() {
       <div id="p-lvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100lvh', opacity: 0, pointerEvents: 'none' }} />
       <div id="p-sab" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-bottom, 0px)', opacity: 0, pointerEvents: 'none' }} />
       <div id="p-sat" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-top, 0px)', opacity: 0, pointerEvents: 'none' }} />
+      {/* DEFINITIVE TEST: this magenta strip occupies the svh→lvh region (894→956). If
+          it's visible at the bottom of the screen, that area is usable; if not, it's off-screen. */}
+      <div style={{ position: 'fixed', left: 0, right: 0, top: '100svh', height: 'calc(100lvh - 100svh)', background: 'rgba(255,0,200,0.65)', zIndex: 100, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: 11, color: '#fff', letterSpacing: '0.04em' }}>svh→lvh · 894→956</div>
       {/* TEMP build + viewport diagnostic readout (top-left). */}
       <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 4px)', left: 'calc(env(safe-area-inset-left, 0px) + 8px)', right: 'calc(env(safe-area-inset-right, 0px) + 48px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, lineHeight: 1.3, color: 'var(--amber)', pointerEvents: 'none' }}>
         {BUILD} · {diag}
