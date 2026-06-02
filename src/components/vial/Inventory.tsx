@@ -2,7 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import {
-  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, daysUntil, fmtMoney, type Substance,
+  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, daysUntil, fmtMoney, containerLabel, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
@@ -36,7 +36,7 @@ function VialCard({ s, onOpen }: { s: Substance; onOpen: (id: string) => void })
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div>
             <div style={{ fontFamily: 'var(--serif)', fontSize: 20, color: 'var(--text)', lineHeight: 1.05 }}>{s.name}</div>
-            <Label style={{ marginTop: 4, whiteSpace: 'nowrap' }}>{s.category} · {s.vialMg} mg</Label>
+            <Label style={{ marginTop: 4, whiteSpace: 'nowrap' }}>{s.category} · {containerLabel(s)}</Label>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>

@@ -1,5 +1,9 @@
-// Domain model + helpers for Vial. Ported from the design handoff
-// (vial-data.jsx) into typed TS. Values are illustrative seed data.
+// Domain model + helpers for Vial.
+// A substance's "form" (how it's taken) is derived from its route and decides
+// which fields/UX apply:
+//   inject (Subcutaneous/Intramuscular) → reconstituted vial: mg + BAC water → units
+//   oral   (Oral)                       → capsules/tablets: count + strength
+//   dose   (Intranasal/Sublingual/...)  → measured: amount (mg) + dose, no BAC water
 
 import { addDays, startOfWeek } from 'date-fns';
 
@@ -9,23 +13,52 @@ export interface TitrationStep {
   current?: boolean;
 }
 
+export type Form = 'inject' | 'oral' | 'dose';
+
+export const CATEGORIES = ['Peptide', 'Medication', 'Vitamin', 'Supplement', 'Other'] as const;
+
+export const ROUTES_BY_CATEGORY: Record<string, string[]> = {
+  Peptide: ['Subcutaneous', 'Intramuscular', 'Intranasal', 'Oral'],
+  Medication: ['Oral', 'Sublingual', 'Subcutaneous', 'Intramuscular', 'Intranasal', 'Topical'],
+  Vitamin: ['Oral', 'Sublingual'],
+  Supplement: ['Oral', 'Sublingual'],
+  Other: ['Oral', 'Subcutaneous', 'Intramuscular', 'Intranasal', 'Sublingual', 'Topical'],
+};
+
+export function routesFor(category: string): string[] {
+  return ROUTES_BY_CATEGORY[category] ?? ROUTES_BY_CATEGORY.Other;
+}
+
+export function formOf(route: string): Form {
+  if (route === 'Subcutaneous' || route === 'Intramuscular') return 'inject';
+  if (route === 'Oral') return 'oral';
+  return 'dose';
+}
+
 export interface Substance {
   id: string;
   name: string;
   category: string;
   sub: string;
   route: string;
-  /** oklch hue for this substance's vial fill + monogram. */
+  /** oklch hue for this substance's fill gauge + monogram. */
   hue: number;
+  /** inject/dose: amount in the vial (mg). Unused for oral. */
   vialMg: number;
+  /** inject only: bacteriostatic water (mL). */
   bacMl: number;
+  /** oral: capsules/tablets in the container. */
+  count: number;
+  /** oral: units (capsules) per administration. */
+  capsPerDose: number;
+  /** inject/dose: dose per administration (mcg). oral: strength per capsule (value, in `unit`). */
   doseMcg: number;
-  unit: 'mg' | 'mcg';
+  unit: 'mg' | 'mcg' | 'IU';
   every: 'week' | 'wk-days' | 'day';
   days: string[];
   time: string;
   period: 'AM' | 'PM';
-  /** micrograms left in the active vial. */
+  /** amount left — mcg for inject/dose, capsules for oral. */
   remaining: number;
   expiry: string;
   pricePerVial: number;
@@ -33,97 +66,7 @@ export interface Substance {
   titration: TitrationStep[] | null;
 }
 
-export const SEED_SUBSTANCES: Substance[] = [
-  {
-    id: 'reta',
-    name: 'Retatrutide',
-    category: 'Metabolic',
-    sub: 'GLP-1 / GIP / GCG agonist',
-    route: 'Subcutaneous',
-    hue: 62,
-    vialMg: 10,
-    bacMl: 2,
-    doseMcg: 4000,
-    unit: 'mg',
-    every: 'week',
-    days: ['Sun'],
-    time: '20:00',
-    period: 'PM',
-    remaining: 4400,
-    expiry: '2026-11-04',
-    pricePerVial: 185,
-    lot: 'RT-4471',
-    titration: [
-      { label: 'Wk 1–4', mcg: 2000 },
-      { label: 'Wk 5–8', mcg: 4000, current: true },
-      { label: 'Wk 9–12', mcg: 6000 },
-      { label: 'Wk 13+', mcg: 8000 },
-    ],
-  },
-  {
-    id: 'motsc',
-    name: 'MOTS-c',
-    category: 'Mitochondrial',
-    sub: 'Mitochondrial-derived peptide',
-    route: 'Subcutaneous',
-    hue: 28,
-    vialMg: 10,
-    bacMl: 2,
-    doseMcg: 5000,
-    unit: 'mg',
-    every: 'wk-days',
-    days: ['Mon', 'Wed', 'Fri'],
-    time: '08:30',
-    period: 'AM',
-    remaining: 6000,
-    expiry: '2026-09-18',
-    pricePerVial: 95,
-    lot: 'MC-2209',
-    titration: null,
-  },
-  {
-    id: 'semax',
-    name: 'Semax',
-    category: 'Nootropic',
-    sub: 'ACTH(4–10) analog',
-    route: 'Intranasal',
-    hue: 88,
-    vialMg: 30,
-    bacMl: 3,
-    doseMcg: 600,
-    unit: 'mcg',
-    every: 'day',
-    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    time: '08:00',
-    period: 'AM',
-    remaining: 21300,
-    expiry: '2027-02-12',
-    pricePerVial: 60,
-    lot: 'SX-8841',
-    titration: null,
-  },
-  {
-    id: 'selank',
-    name: 'Selank',
-    category: 'Anxiolytic',
-    sub: 'Tuftsin heptapeptide analog',
-    route: 'Intranasal',
-    hue: 152,
-    vialMg: 30,
-    bacMl: 3,
-    doseMcg: 300,
-    unit: 'mcg',
-    every: 'day',
-    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-    time: '21:00',
-    period: 'PM',
-    remaining: 10200,
-    expiry: '2026-06-20',
-    pricePerVial: 65,
-    lot: 'SL-3307',
-    titration: null,
-  },
-];
+export const substanceForm = (s: Substance): Form => formOf(s.route);
 
 export const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
@@ -174,12 +117,35 @@ export function longDate(now = new Date()): string {
   });
 }
 
-// ── Derived helpers ──────────────────────────────────────────────
+// ── Derived helpers (form-aware) ──────────────────────────────────
 export const totalMcg = (s: Substance) => s.vialMg * 1000;
-export const fillPct = (s: Substance) =>
-  Math.max(0, Math.min(1, s.remaining / totalMcg(s)));
-export const weeklyUse = (s: Substance) => s.days.length * s.doseMcg;
-export const dosesLeft = (s: Substance) => Math.floor(s.remaining / s.doseMcg);
+
+/** Full container amount, in the unit `remaining` uses (mcg, or capsules for oral). */
+export function fullAmount(s: Substance): number {
+  return formOf(s.route) === 'oral' ? s.count : s.vialMg * 1000;
+}
+
+export function fillPct(s: Substance): number {
+  const total = fullAmount(s);
+  return total > 0 ? Math.max(0, Math.min(1, s.remaining / total)) : 0;
+}
+
+/** How much one logged dose subtracts from `remaining`. */
+export function doseDecrement(s: Substance): number {
+  return formOf(s.route) === 'oral' ? s.capsPerDose || 1 : s.doseMcg;
+}
+
+export function dosesLeft(s: Substance): number {
+  const per = doseDecrement(s);
+  return per > 0 ? Math.floor(s.remaining / per) : 0;
+}
+
+/** Total doses a full container yields (for cost-per-dose). */
+export function dosesPerContainer(s: Substance): number {
+  const per = doseDecrement(s);
+  return per > 0 ? fullAmount(s) / per : 0;
+}
+
 export function daysLeft(s: Substance): number {
   if (s.days.length <= 0) return 999;
   return Math.floor((dosesLeft(s) * 7) / s.days.length);
@@ -209,7 +175,7 @@ export interface Recon {
   mlDraw: number;
   dosesPerVial: number;
 }
-/** U-100 insulin syringe (100 units = 1 mL). */
+/** U-100 insulin syringe (100 units = 1 mL). Injectable form only. */
 export function recon(vialMg: number, bacMl: number, doseMcg: number): Recon {
   const totMcg = vialMg * 1000;
   const concMcgPerMl = totMcg / bacMl;
@@ -220,8 +186,19 @@ export function recon(vialMg: number, bacMl: number, doseMcg: number): Recon {
   return { totMcg, concMcgPerMl, mcgPerUnit, units, mlDraw, dosesPerVial };
 }
 
+/** Dose label for lists: "250 mcg", "4 mg", or "1 cap · 500 mg". */
 export function doseLabel(s: Substance): string {
+  if (formOf(s.route) === 'oral') {
+    const n = s.capsPerDose || 1;
+    const word = n === 1 ? 'cap' : 'caps';
+    return s.doseMcg > 0 ? `${n} ${word} · ${s.doseMcg} ${s.unit}` : `${n} ${word}`;
+  }
   return s.unit === 'mg' ? `${s.doseMcg / 1000} mg` : `${s.doseMcg} mcg`;
+}
+
+/** Container size label: "10 mg" or "60 caps". */
+export function containerLabel(s: Substance): string {
+  return formOf(s.route) === 'oral' ? `${s.count} caps` : `${s.vialMg} mg`;
 }
 
 export const fmtMoney = (n: number) => '$' + n.toLocaleString('en-US');
@@ -233,11 +210,9 @@ export function fmtExpiry(dateStr: string): string {
 }
 
 // ── New-vial helpers ─────────────────────────────────────────────
-/** Distinct oklch hues for new vials' fill + monogram. */
 export const HUE_PALETTE = [62, 28, 88, 152, 200, 264, 320, 12, 110, 234];
 export const pickHue = (index: number) => HUE_PALETTE[index % HUE_PALETTE.length];
 
-/** A stable-ish unique id for a user-created substance. */
 export function newId(): string {
   try {
     if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
@@ -247,7 +222,6 @@ export function newId(): string {
   return 'sub-' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
 }
 
-/** Default beyond-use date: one year out, as yyyy-mm-dd. */
 export function defaultExpiryISO(now = new Date()): string {
   const d = new Date(now);
   d.setFullYear(d.getFullYear() + 1);

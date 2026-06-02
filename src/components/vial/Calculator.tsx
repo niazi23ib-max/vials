@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
-import { recon, type Substance } from '@/lib/substances';
+import { recon, substanceForm, type Substance } from '@/lib/substances';
 import { Label, Chip } from './ui';
 import type { AppApi } from './types';
 
@@ -71,7 +71,7 @@ function ReconTab({ substances }: { substances: Substance[] }) {
     <div>
       <div style={{ display: 'flex', gap: 8, padding: '4px 20px 0', overflowX: 'auto' }}>
         <Label style={{ alignSelf: 'center', flexShrink: 0 }}>Load</Label>
-        {substances.map((s) => (
+        {substances.filter((s) => substanceForm(s) === 'inject').map((s) => (
           <Chip key={s.id} onClick={() => { setMg(s.vialMg); setBac(s.bacMl); setDose(s.doseMcg); }}>{s.name}</Chip>
         ))}
       </div>

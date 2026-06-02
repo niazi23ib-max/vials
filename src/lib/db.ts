@@ -12,10 +12,12 @@ interface SubRow {
   sub: string | null;
   route: string;
   hue: number | string;
-  vial_mg: number | string;
-  bac_ml: number | string;
+  vial_mg: number | string | null;
+  bac_ml: number | string | null;
+  count: number | string | null;
+  caps_per_dose: number | string | null;
   dose_mcg: number | string;
-  unit: 'mcg' | 'mg';
+  unit: 'mcg' | 'mg' | 'IU';
   every: string;
   days: string[] | null;
   time: string | null;
@@ -36,9 +38,11 @@ function rowToSubstance(r: SubRow): Substance {
     sub: r.sub ?? '',
     route: r.route,
     hue: Number(r.hue),
-    vialMg: Number(r.vial_mg),
-    bacMl: Number(r.bac_ml),
-    doseMcg: Number(r.dose_mcg),
+    vialMg: Number(r.vial_mg) || 0,
+    bacMl: Number(r.bac_ml) || 0,
+    count: Number(r.count) || 0,
+    capsPerDose: Number(r.caps_per_dose) || 0,
+    doseMcg: Number(r.dose_mcg) || 0,
     unit: r.unit,
     every: r.every as Substance['every'],
     days: r.days ?? [],
@@ -79,8 +83,10 @@ export async function createSubstance(s: Substance): Promise<Substance> {
     sub: s.sub || null,
     route: s.route,
     hue: s.hue,
-    vial_mg: s.vialMg,
-    bac_ml: s.bacMl,
+    vial_mg: s.vialMg > 0 ? s.vialMg : null,
+    bac_ml: s.bacMl > 0 ? s.bacMl : null,
+    count: s.count > 0 ? s.count : null,
+    caps_per_dose: s.capsPerDose > 0 ? s.capsPerDose : null,
     dose_mcg: s.doseMcg,
     unit: s.unit,
     every: s.every,
@@ -109,8 +115,10 @@ export async function updateSubstance(id: string, s: Substance): Promise<Substan
     sub: s.sub || null,
     route: s.route,
     hue: s.hue,
-    vial_mg: s.vialMg,
-    bac_ml: s.bacMl,
+    vial_mg: s.vialMg > 0 ? s.vialMg : null,
+    bac_ml: s.bacMl > 0 ? s.bacMl : null,
+    count: s.count > 0 ? s.count : null,
+    caps_per_dose: s.capsPerDose > 0 ? s.capsPerDose : null,
     dose_mcg: s.doseMcg,
     unit: s.unit,
     every: s.every,

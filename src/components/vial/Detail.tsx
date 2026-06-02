@@ -1,7 +1,8 @@
 'use client';
 
 import {
-  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabel, recon, ok, DAY_ORDER, type Substance,
+  fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabel, recon, ok, DAY_ORDER,
+  substanceForm, dosesPerContainer, containerLabel, fullAmount, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
@@ -24,10 +25,12 @@ const RECENT = [
 
 export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi; onBack: () => void }) {
   const s = sub;
-  const r = recon(s.vialMg, s.bacMl, s.doseMcg);
+  const form = substanceForm(s);
+  const r = form === 'inject' ? recon(s.vialMg, s.bacMl, s.doseMcg) : null;
   const stock = stockStatus(s);
   const runwayTone = stock === 'critical' ? 'var(--red)' : stock === 'low' ? 'var(--amber)' : 'var(--text)';
-  const costPerDose = s.pricePerVial / ((s.vialMg * 1000) / s.doseMcg);
+  const dpc = dosesPerContainer(s);
+  const costPerDose = dpc > 0 ? s.pricePerVial / dpc : 0;
 
   return (
     <div style={{ minHeight: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
@@ -75,8 +78,22 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
           <KV label="Dose" value={doseLabel(s)} />
           <KV label="Frequency" value={s.days.length === 7 ? 'Daily' : `${s.days.length}× / week`} />
-          <KV label="Draw (U-100)" value={`${r.units.toFixed(1)} units`} />
-          <KV label="Concentration" value={`${(r.concMcgPerMl / 1000).toFixed(2)} mg/mL`} />
+          {r ? (
+            <>
+              <KV label="Draw (U-100)" value={`${r.units.toFixed(1)} units`} />
+              <KV label="Concentration" value={`${(r.concMcgPerMl / 1000).toFixed(2)} mg/mL`} />
+            </>
+          ) : form === 'oral' ? (
+            <>
+              <KV label="In container" value={containerLabel(s)} />
+              <KV label="Strength" value={`${s.doseMcg} ${s.unit}`} />
+            </>
+          ) : (
+            <>
+              <KV label="In container" value={containerLabel(s)} />
+              <KV label="Route" value={s.route} />
+            </>
+          )}
           <KV label="Expires" value={fmtExpiry(s.expiry)} tone={expiryStatus(s) === 'soon' ? 'var(--amber)' : 'var(--text)'} />
           <KV label="Cost / dose" value={`$${costPerDose.toFixed(2)}`} />
         </div>
@@ -108,14 +125,14 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
         </div>
 
         <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)', marginTop: 20, lineHeight: 1.5 }}>
-          Lot {s.lot} · {s.vialMg} mg in {s.bacMl} mL BAC · {fmtMoney(s.pricePerVial)} / vial
+          Lot {s.lot || '—'} · {form === 'inject' ? `${s.vialMg} mg in ${s.bacMl} mL BAC` : containerLabel(s)} · {fmtMoney(s.pricePerVial)} / {form === 'inject' ? 'vial' : 'container'}
         </div>
       </div>
 
       <div style={{ position: 'sticky', bottom: 0, padding: '12px 20px 28px', background: 'linear-gradient(rgba(16,13,10,0), var(--bg) 40%)', display: 'flex', gap: 10 }}>
         <button onClick={() => app.log(s.id)} style={{ flex: 1, padding: '15px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icon.check /> Log dose</button>
         <button
-          onClick={() => { if (confirm(`Refill ${s.name} back to full (${s.vialMg} mg)?`)) app.updateSubstance(s.id, { ...s, remaining: s.vialMg * 1000 }); }}
+          onClick={() => { if (confirm(`Refill ${s.name} back to full (${containerLabel(s)})?`)) app.updateSubstance(s.id, { ...s, remaining: fullAmount(s) }); }}
           style={{ width: 56, borderRadius: 16, border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}
         >
           Refill

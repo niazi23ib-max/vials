@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Substance } from '@/lib/substances';
+import { doseDecrement, fullAmount, type Substance } from '@/lib/substances';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
 import { useSession } from '@/lib/useSession';
@@ -123,9 +123,10 @@ export function VialApp() {
     if (!sub) return;
     const eid = subId + '-today';
     if (taken.has(eid) === makeTaken) return;
+    const dec = doseDecrement(sub);
     const newRemaining = makeTaken
-      ? Math.max(0, sub.remaining - sub.doseMcg)
-      : Math.min(sub.vialMg * 1000, sub.remaining + sub.doseMcg);
+      ? Math.max(0, sub.remaining - dec)
+      : Math.min(fullAmount(sub), sub.remaining + dec);
 
     // optimistic
     setTaken((prev) => {
