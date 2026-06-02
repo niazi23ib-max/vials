@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b17';
+const BUILD = 'b18';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -53,21 +53,22 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
 }
 
 const shell: React.CSSProperties = {
-  // The app is edge-to-edge (viewport-fit=cover), so the real screen is the LARGE
-  // viewport, not the small one. On the test device (iPhone 16 Pro Max) svh=894 but
-  // lvh=956 — and 956-894 = 62 = the top safe-area inset. That 62px shortfall was the
-  // empty strip at the bottom: a shell sized to 100svh stops short of the screen.
-  // Pinning with position:fixed + inset:0 makes the shell own the full-screen box
-  // (the initial containing block == the cover viewport), so the bottom bar always
-  // reaches the physical bottom edge no matter how iOS resolves svh/lvh/dvh.
-  // Centering is margin:auto (NOT transform) so absolute children + sheet overlays
-  // still anchor to the shell. overflow:hidden here + overflowX:hidden on the scroll
-  // area eliminate the earlier side-to-side drift.
+  // CONFIRMED on the test device (b17 readout): a position:fixed + inset:0 shell
+  // rendered 0–894 — iOS anchors the fixed containing block to the SMALL viewport
+  // (894), NOT the full screen. But the physical screen is 956 (scr956 === lvh956),
+  // so inset:0 left a 62px gap at the BOTTOM (894→956) — the black strip under the
+  // nav. Fix: pin top:0 and set an explicit height of 100lvh (the LARGE viewport ==
+  // the true 956px screen). The fixed box then spans 0–956, overflowing the short
+  // containing block downward into the home-indicator strip (cover mode draws there),
+  // so the nav reaches the physical bottom edge. It isn't clipped by body
+  // overflow:hidden (ancestor overflow never clips fixed boxes). Center via
+  // margin:auto (no transform) so absolute children + sheet overlays still anchor
+  // to the shell; overflow:hidden + the scroll area's overflowX:hidden kill drift.
   position: 'fixed',
   top: 0,
-  bottom: 0,
   left: 0,
   right: 0,
+  height: '100lvh',
   margin: '0 auto',
   width: '100%',
   maxWidth: 440,

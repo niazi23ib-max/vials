@@ -7,6 +7,7 @@ import {
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
 import type { AppApi } from './types';
+import { PEPTIDE_PRESETS, PRESET_GROUPS, type PeptidePreset } from '@/lib/peptides';
 
 type DoseUnit = 'mcg' | 'mg' | 'IU';
 
@@ -39,6 +40,95 @@ function Fld({ label, children }: { label: string; children: ReactNode }) {
       <div style={{ marginBottom: 7 }}><Label>{label}</Label></div>
       {children}
     </label>
+  );
+}
+
+/** Short frequency label for a preset's suggested schedule. */
+function presetFreqLabel(p: PeptidePreset): string {
+  const s = p.schedule;
+  if (s.kind === 'interval') {
+    const n = s.intervalDays ?? 1;
+    return n === 1 ? 'Daily' : n === 2 ? 'Every other day' : `Every ${n}d`;
+  }
+  if (s.kind === 'cycle') return `${s.cycleOn ?? 0} on / ${s.cycleOff ?? 0} off`;
+  const d = s.days ?? [];
+  if (d.length >= 7) return 'Daily';
+  if (d.length === 1) return 'Weekly';
+  return `${d.length}×/wk`;
+}
+
+/** Collapsible "start from a known peptide" picker — prefills the form. Add mode only. */
+function LibraryPicker({ onPick }: { onPick: (p: PeptidePreset) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const matches = PEPTIDE_PRESETS.filter(
+    (p) =>
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      (p.aka ?? '').toLowerCase().includes(query) ||
+      p.blurb.toLowerCase().includes(query) ||
+      p.group.toLowerCase().includes(query),
+  );
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 11, padding: '13px 14px', borderRadius: 14, border: '1px dashed var(--line-strong)', background: 'var(--amber-soft)', color: 'var(--text)', cursor: 'pointer' }}
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: 'var(--amber)', flexShrink: 0 }}>
+          <path d="M9 2l1.6 3.6L14.5 7l-3.9 1.4L9 12l-1.6-3.6L3.5 7l3.9-1.4L9 2z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+        </svg>
+        <span style={{ flex: 1, textAlign: 'left', fontFamily: 'var(--sans)', fontSize: 14, fontWeight: 500 }}>Start from peptide library</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-faint)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+          <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <input
+            className="vlf" style={inputStyle} value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Search peptides…" autoFocus
+          />
+          <div style={{ maxHeight: 300, overflowY: 'auto', overscrollBehavior: 'contain', marginTop: 8 }}>
+            {PRESET_GROUPS.map((g) => {
+              const items = matches.filter((m) => m.group === g);
+              if (!items.length) return null;
+              return (
+                <div key={g} style={{ marginTop: 6 }}>
+                  <div style={{ padding: '6px 2px' }}><Label>{g}</Label></div>
+                  {items.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => { onPick(p); setOpen(false); setQ(''); }}
+                      style={{ width: '100%', textAlign: 'left', display: 'block', padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface-2)', cursor: 'pointer', marginBottom: 7 }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        <span style={{ fontFamily: 'var(--serif)', fontSize: 16, color: 'var(--text)' }}>{p.name}</span>
+                        {p.aka && <span style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)' }}>{p.aka}</span>}
+                      </div>
+                      <div style={{ fontFamily: 'var(--sans)', fontSize: 12, color: 'var(--text-dim)', marginTop: 3, lineHeight: 1.35 }}>{p.blurb}</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 10.5, color: 'var(--text-faint)', marginTop: 5 }}>
+                        {p.dose} {p.doseUnit} · {presetFreqLabel(p)} · t½ {p.halfLife}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+            {matches.length === 0 && (
+              <div style={{ padding: '14px 4px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)' }}>No matches for “{q}”.</div>
+            )}
+          </div>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-faint)', marginTop: 4, lineHeight: 1.5 }}>
+            Typical starting points — always adjust to your own protocol.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -155,6 +245,34 @@ export function AddVialSheet({
     setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
   }
 
+  // Prefill the whole form from a library preset (all values stay editable).
+  function applyPreset(p: PeptidePreset) {
+    const f = formOf(p.route);
+    setName(p.name);
+    setCategory(p.category);
+    setRoute(p.route);
+    setKlass(p.aka || '');
+    if (f === 'oral') {
+      setCount(String(p.count ?? 30));
+      setCapsPerDose('1');
+      setVialMg('');
+      setBacMl('');
+    } else {
+      setVialMg(p.vialMg ? String(p.vialMg) : '');
+      setBacMl(f === 'inject' ? String(p.bacMl ?? 2) : '');
+      setCount('');
+    }
+    setDoseValue(String(p.dose));
+    setDoseUnit(p.doseUnit);
+    setScheduleKind(p.schedule.kind);
+    if (p.schedule.kind === 'weekly') setDays(p.schedule.days?.length ? [...p.schedule.days] : [...DAY_ORDER]);
+    if (p.schedule.kind === 'interval') setIntervalDays(String(p.schedule.intervalDays ?? 2));
+    if (p.schedule.kind === 'cycle') { setCycleOn(String(p.schedule.cycleOn ?? 5)); setCycleOff(String(p.schedule.cycleOff ?? 2)); }
+    if (p.time) setTime(p.time);
+    setCourseWeeks(p.courseWeeks ? String(p.courseWeeks) : '');
+    setError(null);
+  }
+
   const mg = Number(vialMg);
   const bac = Number(bacMl);
   const cnt = Number(count);
@@ -259,6 +377,7 @@ export function AddVialSheet({
   return (
     <Sheet open={open} onClose={onClose} title={isEdit ? 'Edit item' : 'Add an item'}>
       <form onSubmit={submit} style={{ padding: '16px 22px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {!isEdit && <LibraryPicker onPick={applyPreset} />}
         <Fld label="Name">
           <input className="vlf" style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BPC-157, Vitamin D3" />
         </Fld>
