@@ -54,11 +54,11 @@ const shell: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   maxWidth: 440,
-  // 100vh + viewport-fit=cover spans the FULL screen incl. the home-indicator
-  // area in standalone. (100dvh has a known PWA cold-launch bug; window.innerHeight
-  // excludes the home-indicator area — both left a gap.) The docked nav paints its
-  // own background through the safe area via padding-bottom: env(safe-area-inset-bottom).
-  height: '100vh',
+  // 100svh = the SMALL viewport — guaranteed never taller than the visible area,
+  // so the UI never overflows/cuts off at the bottom. (100vh/100lvh use the LARGE
+  // viewport, which on iOS is taller than what's visible and pushed the bottom
+  // off-screen.) The fixed nav pins to the visible bottom independently.
+  height: '100svh',
   margin: '0 auto',
   overflow: 'hidden',
   overscrollBehavior: 'none',
