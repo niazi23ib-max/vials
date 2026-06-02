@@ -18,6 +18,10 @@ import { AddVialSheet } from './AddVialSheet';
 import { Login } from './Login';
 import { SetPassword } from './SetPassword';
 
+// Bump on each deploy — shown top-left so we can confirm the installed PWA is
+// actually running the latest build (vs. a stale cached snapshot).
+const BUILD = 'b14';
+
 function todayLocalISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -299,6 +303,10 @@ export function VialApp() {
 
   return (
     <div style={shell}>
+      {/* Build marker — confirms which build the installed PWA is actually running. */}
+      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 16px)', left: 'calc(env(safe-area-inset-left, 0px) + 18px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-faint)', pointerEvents: 'none' }}>
+        {BUILD}
+      </div>
       {/* sign out */}
       <button
         onClick={signOut}
