@@ -7,6 +7,7 @@ import {
 } from '@/lib/substances';
 import { Monogram, Label, Icon, VialFill } from './ui';
 import { AdherencePanel } from './Stats';
+import { Reminders } from './Reminders';
 import type { AppApi } from './types';
 
 interface Ev {
@@ -135,6 +136,8 @@ export function TodayScreen({ app }: { app: AppApi }) {
       </div>
 
       <AdherencePanel app={app} />
+
+      <Reminders />
 
       {(lowStock.length > 0 || expiring.length > 0) && (
         <div style={{ marginTop: 30 }}>
