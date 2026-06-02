@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b18';
+const BUILD = 'b19';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -184,9 +184,16 @@ export function VialApp() {
     const read = () => {
       const ih = Math.round(window.innerHeight);
       const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
+      const sab = px('p-sab');
+      const sat = px('p-sat');
+      // env(safe-area-inset-bottom) reads 0 for the nav — it sits in the shell's
+      // region below the small viewport, where iOS zeroes the inset. Drive the nav's
+      // safe padding from the reliably-measured probe (anchored at top:0) via a CSS var.
+      if (sab >= 0) document.documentElement.style.setProperty('--sab', `${sab}px`);
+      if (sat >= 0) document.documentElement.style.setProperty('--sat', `${sat}px`);
       // sh/nv = rendered top-bottom of the shell + nav. If nv's bottom == scr, the bar
       // reaches the physical screen edge (the real fix-confirmation signal).
-      setDiag(`ih${ih} lvh${px('p-lvh')} svh${px('p-svh')} sat${px('p-sat')} sab${px('p-sab')} scr${scr} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
+      setDiag(`ih${ih} lvh${px('p-lvh')} svh${px('p-svh')} sat${sat} sab${sab} scr${scr} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
     };
     read();
     const t = setTimeout(read, 600);
@@ -405,7 +412,7 @@ export function VialApp() {
       {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
           flex-column shell. Its background fills the home-indicator safe area via
           padding-bottom: env(safe-area-inset-bottom). */}
-      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'calc(var(--sab, 34px) + 14px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
