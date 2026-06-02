@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import webpush from 'web-push';
-import { isDueOn, doseLabelOn, type Substance, type TitrationStep } from '@/lib/substances';
+import { isDueOn, doseLabelOn, dayDoses, type Substance, type TitrationStep } from '@/lib/substances';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,13 +27,13 @@ interface SubRow {
   schedule_kind: string | null; days: string[] | null;
   interval_days: number | string | null; cycle_on: number | string | null; cycle_off: number | string | null;
   anchor_date: string | null; course_start: string | null; course_weeks: number | string | null;
-  created_at: string | null; time: string | null; titration: TitrationStep[] | null;
+  created_at: string | null; time: string | null; times: string[] | null; titration: TitrationStep[] | null;
   reminders_enabled: boolean | null;
 }
 interface PushRow { user_id: string; endpoint: string; p256dh: string; auth: string; tz: string; }
 
 const SUB_COLS =
-  'id,user_id,name,route,unit,dose_mcg,caps_per_dose,schedule_kind,days,interval_days,cycle_on,cycle_off,anchor_date,course_start,course_weeks,created_at,time,titration,reminders_enabled';
+  'id,user_id,name,route,unit,dose_mcg,caps_per_dose,schedule_kind,days,interval_days,cycle_on,cycle_off,anchor_date,course_start,course_weeks,created_at,time,times,titration,reminders_enabled';
 
 /** Map a DB row to a Substance for the shared scheduling/dose helpers (unused fields defaulted). */
 function toSub(r: SubRow): Substance {
@@ -45,7 +45,7 @@ function toSub(r: SubRow): Substance {
     days: r.days ?? [], intervalDays: Number(r.interval_days) || 0,
     cycleOn: Number(r.cycle_on) || 0, cycleOff: Number(r.cycle_off) || 0,
     anchor: r.anchor_date ?? '', courseStart: r.course_start ?? '', courseWeeks: Number(r.course_weeks) || 0,
-    time: r.time ?? '', period: 'AM', remaining: 0, expiry: '', pricePerVial: 0, lot: '',
+    time: r.time ?? '', period: 'AM', times: r.times ?? [], remaining: 0, expiry: '', pricePerVial: 0, lot: '',
     reconstitutedAt: '', budDays: 0, remindersEnabled: r.reminders_enabled !== false,
     titration: r.titration ?? null, created: r.created_at ? r.created_at.slice(0, 10) : '',
   };
@@ -105,22 +105,22 @@ export async function GET(req: Request) {
   const { data: subsAll } = await db.from('substances').select(SUB_COLS).in('user_id', userIds);
   const substances = ((subsAll as SubRow[] | null) ?? []).map((r) => ({ user_id: r.user_id, sub: toSub(r) }));
 
-  type Due = { user_id: string; sub: Substance; date: string };
+  type Due = { user_id: string; sub: Substance; date: string; slot: string };
   const due: Due[] = [];
   for (const { user_id, sub } of substances) {
     const u = byUser.get(user_id);
     if (!u) continue;
     if (!sub.remindersEnabled) continue; // user muted reminders for this item
-    const dm = doseMinutes(sub.time);
-    if (dm === null) continue;
     const t = localParts(now, u.tz);
-    if (isDueOn(sub, t.date) && t.minutes >= dm && t.minutes <= dm + WINDOW_MIN) {
-      due.push({ user_id, sub, date: t.date }); // at/just-after dose time today
-    } else if (t.minutes <= WINDOW_MIN) {
-      // Just after local midnight: catch a late dose carried over from yesterday.
-      const y = localParts(new Date(now.getTime() - 86_400_000), u.tz);
-      if (isDueOn(sub, y.date) && t.minutes + 1440 >= dm && t.minutes + 1440 <= dm + WINDOW_MIN) {
-        due.push({ user_id, sub, date: y.date });
+    const y = localParts(new Date(now.getTime() - 86_400_000), u.tz);
+    for (const d of dayDoses(sub)) {
+      const dm = doseMinutes(d.time);
+      if (dm === null) continue;
+      if (isDueOn(sub, t.date) && t.minutes >= dm && t.minutes <= dm + WINDOW_MIN) {
+        due.push({ user_id, sub, date: t.date, slot: d.slot }); // at/just-after this dose time today
+      } else if (t.minutes <= WINDOW_MIN && isDueOn(sub, y.date) && t.minutes + 1440 >= dm && t.minutes + 1440 <= dm + WINDOW_MIN) {
+        // Just after local midnight: catch a late evening dose carried over from yesterday.
+        due.push({ user_id, sub, date: y.date, slot: d.slot });
       }
     }
   }
@@ -130,12 +130,12 @@ export async function GET(req: Request) {
   const dates = [...new Set(due.map((d) => d.date))];
   const subIds = due.map((d) => d.sub.id);
   const [{ data: logs }, { data: reminded }] = await Promise.all([
-    db.from('dose_logs').select('substance_id,scheduled_date').in('substance_id', subIds).in('scheduled_date', dates),
-    db.from('reminder_log').select('substance_id,scheduled_date').in('substance_id', subIds).in('scheduled_date', dates),
+    db.from('dose_logs').select('substance_id,scheduled_date,slot').in('substance_id', subIds).in('scheduled_date', dates),
+    db.from('reminder_log').select('substance_id,scheduled_date,slot').in('substance_id', subIds).in('scheduled_date', dates),
   ]);
-  const logged = new Set((logs ?? []).map((l) => `${l.substance_id}|${l.scheduled_date}`));
-  const already = new Set((reminded ?? []).map((l) => `${l.substance_id}|${l.scheduled_date}`));
-  const toSend = due.filter((d) => !logged.has(`${d.sub.id}|${d.date}`) && !already.has(`${d.sub.id}|${d.date}`));
+  const logged = new Set((logs ?? []).map((l) => `${l.substance_id}|${l.scheduled_date}|${l.slot ?? ''}`));
+  const already = new Set((reminded ?? []).map((l) => `${l.substance_id}|${l.scheduled_date}|${l.slot ?? ''}`));
+  const toSend = due.filter((d) => !logged.has(`${d.sub.id}|${d.date}|${d.slot}`) && !already.has(`${d.sub.id}|${d.date}|${d.slot}`));
 
   if (dryRun) {
     return NextResponse.json({ ok: true, due: due.length, wouldSend: toSend.map((d) => ({ name: d.sub.name, date: d.date })) });
@@ -144,11 +144,11 @@ export async function GET(req: Request) {
   let sent = 0;
   for (const d of toSend) {
     // Claim the dedupe slot first; if it already exists, another tick handled it.
-    const { error: claimErr } = await db.from('reminder_log').insert({ user_id: d.user_id, substance_id: d.sub.id, scheduled_date: d.date });
+    const { error: claimErr } = await db.from('reminder_log').insert({ user_id: d.user_id, substance_id: d.sub.id, scheduled_date: d.date, slot: d.slot });
     if (claimErr) continue;
 
     const label = doseLabelOn(d.sub, d.date);
-    const payload = JSON.stringify({ title: `Time for ${d.sub.name}`, body: `${label} · ${d.sub.route}`, url: '/', tag: `dose-${d.sub.id}-${d.date}` });
+    const payload = JSON.stringify({ title: `Time for ${d.sub.name}`, body: `${label} · ${d.sub.route}`, url: '/', tag: `dose-${d.sub.id}-${d.date}-${d.slot}` });
     const devices = byUser.get(d.user_id)?.devices ?? [];
     for (const dev of devices) {
       try {

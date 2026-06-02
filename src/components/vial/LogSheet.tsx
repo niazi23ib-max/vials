@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  doseLabelOn, drawUnits, fillPct, substanceForm, isoDate,
+  doseLabelOn, drawUnits, fillPct, substanceForm, isoDate, dayDoses,
   INJECTION_SITES, nextSite,
 } from '@/lib/substances';
 import { Sheet, Monogram, Label, Icon, VialFill, Syringe } from './ui';
@@ -21,6 +21,7 @@ export function LogSheet({
 }) {
   const [chosen, setChosen] = useState<string | null>(subId);
   const [site, setSite] = useState<string>('');
+  const [slotSel, setSlotSel] = useState<string>('');
   const todayISO = isoDate(new Date());
 
   useEffect(() => {
@@ -30,11 +31,17 @@ export function LogSheet({
   const s = app.substances.find((x) => x.id === chosen);
   const isInject = s ? substanceForm(s) === 'inject' : false;
   const units = s ? drawUnits(s, todayISO) : 0;
+  const doses = s ? dayDoses(s) : [];
+  const multi = doses.length > 1;
+  const selDose = doses.find((d) => d.slot === slotSel) ?? doses[0];
 
-  // Default the injection site to the next one in rotation.
+  // On (re)open, default the injection site (rotation) and the dose slot (next pending).
   useEffect(() => {
-    if (s && substanceForm(s) === 'inject') setSite(nextSite(app.lastSiteFor(s.id)));
-    else setSite('');
+    if (!s) { setSite(''); setSlotSel(''); return; }
+    setSite(substanceForm(s) === 'inject' ? nextSite(app.lastSiteFor(s.id)) : '');
+    const ds = dayDoses(s);
+    const pending = ds.find((d) => app.statusOf(s.id, todayISO, d.slot) !== 'taken');
+    setSlotSel((pending ?? ds[0]).slot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosen, open]);
 
@@ -65,9 +72,27 @@ export function LogSheet({
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: 'var(--serif)', fontSize: 24, color: 'var(--text)' }}>{s.name}</div>
                 <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{doseLabelOn(s, todayISO)}{isInject && units > 0 ? ` · ${units.toFixed(1)} units` : ''}</div>
-                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Today · {s.time} {s.period} · {s.route}</div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Today · {selDose ? `${selDose.time} ${selDose.period}` : `${s.time} ${s.period}`} · {s.route}</div>
               </div>
             </div>
+
+            {multi && (
+              <div style={{ marginBottom: 16 }}>
+                <Label>Which dose</Label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {doses.map((d) => {
+                    const on = d.slot === slotSel;
+                    const taken = app.statusOf(s.id, todayISO, d.slot) === 'taken';
+                    return (
+                      <button key={d.slot} type="button" onClick={() => setSlotSel(d.slot)}
+                        style={{ padding: '8px 12px', borderRadius: 999, cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 6, background: on ? 'var(--amber)' : 'rgba(255,255,255,0.03)', border: `1px solid ${on ? 'var(--amber)' : 'var(--line)'}`, color: on ? 'var(--bg)' : 'var(--text-dim)' }}>
+                        {d.time} {d.period}{taken ? ' ✓' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {isInject && units > 0 && (
               <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--line-strong)', borderRadius: 16 }}>
@@ -100,13 +125,13 @@ export function LogSheet({
             )}
 
             <button
-              onClick={() => { app.confirmLog(s.id, isInject ? site : undefined); onClose(); }}
+              onClick={() => { app.confirmLog(s.id, slotSel, isInject ? site : undefined); onClose(); }}
               style={{ width: '100%', padding: '15px 0', borderRadius: 16, border: 'none', background: 'var(--amber)', color: 'var(--bg)', fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap' }}
             >
               <Icon.check /> Confirm dose
             </button>
             <button
-              onClick={() => { app.skipLog(s.id); onClose(); }}
+              onClick={() => { app.skipLog(s.id, slotSel); onClose(); }}
               style={{ width: '100%', padding: '13px 0', marginTop: 10, borderRadius: 16, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 12.5, cursor: 'pointer' }}
             >
               Mark as skipped

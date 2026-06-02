@@ -30,6 +30,7 @@ interface SubRow {
   course_weeks: number | string | null;
   time: string | null;
   period: string | null;
+  times: string[] | null;
   remaining: number | string;
   expiry: string | null;
   price_per_vial: number | string;
@@ -66,6 +67,7 @@ function rowToSubstance(r: SubRow): Substance {
     courseWeeks: Number(r.course_weeks) || 0,
     time: r.time ?? '',
     period: (r.period as 'AM' | 'PM') ?? 'AM',
+    times: r.times && r.times.length ? r.times : (r.time ? [r.time] : []),
     remaining: Number(r.remaining),
     expiry: r.expiry ?? '',
     pricePerVial: Number(r.price_per_vial),
@@ -121,6 +123,7 @@ function subToRow(s: Substance) {
     course_weeks: s.courseWeeks > 0 ? s.courseWeeks : null,
     time: s.time || null,
     period: s.period,
+    times: s.times && s.times.length ? s.times : (s.time ? [s.time] : []),
     remaining: s.remaining,
     expiry: s.expiry || null,
     price_per_vial: s.pricePerVial,
@@ -175,13 +178,14 @@ export interface DoseLogRow {
   status: 'taken' | 'skipped';
   site: string | null;
   consumed: boolean | null;
+  slot: string;
 }
 
 /** All of the user's dose logs on or after `sinceISO` (for history, the week view, and stats). */
 export async function listLogs(sinceISO: string): Promise<DoseLogRow[]> {
   const { data, error } = await createClient()
     .from('dose_logs')
-    .select('id,substance_id,scheduled_date,status,site,consumed')
+    .select('id,substance_id,scheduled_date,status,site,consumed,slot')
     .gte('scheduled_date', sinceISO)
     .order('scheduled_date', { ascending: false });
   if (error) throw error;
@@ -194,6 +198,7 @@ export async function setLog(
   status: 'taken' | 'skipped',
   site?: string | null,
   consumed = true,
+  slot = '',
 ): Promise<void> {
   const user_id = await uid();
   const { error } = await createClient()
@@ -203,22 +208,24 @@ export async function setLog(
         user_id,
         substance_id: substanceId,
         scheduled_date: dateISO,
+        slot,
         status,
         site: status === 'taken' ? site ?? null : null,
         consumed: status === 'taken' ? consumed : true,
         taken_at: status === 'taken' ? new Date().toISOString() : null,
       },
-      { onConflict: 'substance_id,scheduled_date' },
+      { onConflict: 'substance_id,scheduled_date,slot' },
     );
   if (error) throw error;
 }
 
-export async function deleteLog(substanceId: string, dateISO: string): Promise<void> {
+export async function deleteLog(substanceId: string, dateISO: string, slot = ''): Promise<void> {
   const { error } = await createClient()
     .from('dose_logs')
     .delete()
     .eq('substance_id', substanceId)
-    .eq('scheduled_date', dateISO);
+    .eq('scheduled_date', dateISO)
+    .eq('slot', slot);
   if (error) throw error;
 }
 

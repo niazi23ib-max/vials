@@ -187,6 +187,7 @@ export function AddVialSheet({
   const [startDate, setStartDate] = useState(''); // anchor + course start (interval/cycle)
   const [courseWeeks, setCourseWeeks] = useState(''); // optional course length
   const [time, setTime] = useState('08:00');
+  const [extraTimes, setExtraTimes] = useState<string[]>([]); // additional doses/day beyond `time`
   const [price, setPrice] = useState('');
   const [expiry, setExpiry] = useState('');
   const [lot, setLot] = useState('');
@@ -227,7 +228,11 @@ export function AddVialSheet({
       setCycleOff(String(editing.cycleOff || 2));
       setStartDate(editing.anchor || editing.courseStart || editing.created || isoDate(new Date()));
       setCourseWeeks(editing.courseWeeks ? String(editing.courseWeeks) : '');
-      setTime(editing.time || '08:00');
+      {
+        const ts0 = editing.times && editing.times.length ? [...editing.times].sort() : (editing.time ? [editing.time] : ['08:00']);
+        setTime(ts0[0] || '08:00');
+        setExtraTimes(ts0.slice(1));
+      }
       setPrice(editing.pricePerVial ? String(editing.pricePerVial) : '');
       setExpiry(editing.expiry || defaultExpiryISO());
       setLot(editing.lot || '');
@@ -254,6 +259,7 @@ export function AddVialSheet({
       setStartDate(isoDate(new Date()));
       setCourseWeeks('');
       setTime('08:00');
+      setExtraTimes([]);
       setPrice('');
       setExpiry(defaultExpiryISO());
       setLot('');
@@ -301,6 +307,7 @@ export function AddVialSheet({
     if (p.schedule.kind === 'interval') setIntervalDays(String(p.schedule.intervalDays ?? 2));
     if (p.schedule.kind === 'cycle') { setCycleOn(String(p.schedule.cycleOn ?? 5)); setCycleOff(String(p.schedule.cycleOff ?? 2)); }
     setTime(p.time ?? '08:00'); // reset so a timed pick (e.g. Melatonin 22:00) doesn't leave a stale time
+    setExtraTimes([]);
     setCourseWeeks(p.courseWeeks ? String(p.courseWeeks) : '');
     setError(null);
   }
@@ -370,6 +377,7 @@ export function AddVialSheet({
       courseWeeks: cw,
       time: time || '08:00',
       period: (hour < 12 ? 'AM' : 'PM') as 'AM' | 'PM',
+      times: [...new Set([time, ...extraTimes].map((t) => t.trim()).filter(Boolean))].sort(),
       expiry: expiry || defaultExpiryISO(),
       pricePerVial: price === '' ? 0 : Math.max(0, Number(price)),
       lot: lot.trim(),
@@ -605,8 +613,18 @@ export function AddVialSheet({
 
         {/* Native time/date pickers each get a full-width row — on iOS they render
             wider than a half column and overlap the field beside them. */}
-        <Fld label="Time">
+        <Fld label={extraTimes.length ? 'Times (one dose at each)' : 'Time'}>
           <input className="vlf" style={inputStyle} type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          {extraTimes.map((t, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+              <input className="vlf" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="time" value={t}
+                onChange={(e) => setExtraTimes((p) => p.map((x, idx) => (idx === i ? e.target.value : x)))} />
+              <button type="button" aria-label="Remove time" onClick={() => setExtraTimes((p) => p.filter((_, idx) => idx !== i))}
+                style={{ flexShrink: 0, width: 38, height: 40, borderRadius: 10, border: '1px solid var(--line)', background: 'transparent', color: 'var(--text-faint)', fontSize: 16, cursor: 'pointer' }}>×</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setExtraTimes((p) => [...p, '20:00'])}
+            style={{ marginTop: 8, width: '100%', padding: '9px 0', borderRadius: 10, border: '1px dashed var(--line-strong)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 12, cursor: 'pointer' }}>+ Add another dose time</button>
         </Fld>
 
         {form === 'inject' && (

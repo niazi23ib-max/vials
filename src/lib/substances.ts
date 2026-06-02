@@ -78,6 +78,9 @@ export interface Substance {
   courseWeeks: number;
   time: string;
   period: 'AM' | 'PM';
+  /** HH:MM dose times for a due day. Empty or single → one dose at `time` (legacy);
+   *  length > 1 → multiple doses per day, each its own log + reminder. */
+  times: string[];
   /** amount left — mcg for inject/dose, capsules for oral. */
   remaining: number;
   expiry: string;
@@ -160,13 +163,14 @@ export function isDueOn(s: Substance, iso: string): boolean {
 
 /** Average doses per week implied by the schedule (for runway math). */
 export function dosesPerWeek(s: Substance): number {
-  if (s.scheduleKind === 'interval') return s.intervalDays > 0 ? 7 / s.intervalDays : 7;
+  const perDay = dosesPerDay(s);
+  if (s.scheduleKind === 'interval') return (s.intervalDays > 0 ? 7 / s.intervalDays : 7) * perDay;
   if (s.scheduleKind === 'cycle') {
     const on = s.cycleOn > 0 ? s.cycleOn : 0;
     const period = on + (s.cycleOff >= 0 ? s.cycleOff : 0);
-    return period > 0 ? (on * 7) / period : 7;
+    return (period > 0 ? (on * 7) / period : 7) * perDay;
   }
-  return s.days.length;
+  return s.days.length * perDay;
 }
 
 export interface CourseInfo { active: boolean; week: number; total: number; ended: boolean; }
@@ -438,9 +442,32 @@ export function fmtExpiry(dateStr: string): string {
 
 // ── Dose-log model + adherence ───────────────────────────────────
 export type DoseStatus = 'taken' | 'skipped';
-/** Logs keyed by `${substanceId}|${isoDate}`. */
+/** Logs keyed by `${substanceId}|${isoDate}` (single dose/day) or
+ *  `${substanceId}|${isoDate}|${slot}` where slot is the HH:MM of a specific dose
+ *  (multi-dose days). Single-dose substances use the empty slot → legacy keys. */
 export type LogMap = Record<string, DoseStatus>;
-export const logKey = (subId: string, iso: string) => `${subId}|${iso}`;
+export const logKey = (subId: string, iso: string, slot = '') => (slot ? `${subId}|${iso}|${slot}` : `${subId}|${iso}`);
+
+/** The dose times for a due day, sorted ascending. Falls back to the legacy single `time`. */
+export function doseTimes(s: Substance): string[] {
+  const t = s.times && s.times.length ? s.times : (s.time ? [s.time] : []);
+  return [...t].sort();
+}
+export function dosesPerDay(s: Substance): number {
+  return Math.max(1, doseTimes(s).length);
+}
+export const periodOf = (time: string): 'AM' | 'PM' => (Number(time.slice(0, 2)) < 12 ? 'AM' : 'PM');
+
+export interface DayDose { time: string; period: 'AM' | 'PM'; slot: string; }
+/** The doses on a due day, one per time. `slot` is '' for a single-dose substance
+ *  (preserving legacy log keys) or the HH:MM time when there are several per day. */
+export function dayDoses(s: Substance): DayDose[] {
+  const times = doseTimes(s);
+  const multi = times.length > 1;
+  return times.map((t) => ({ time: t, period: periodOf(t), slot: multi ? t : '' }));
+}
+/** The log slots a due day expects ('' for single-dose; each HH:MM for multi-dose). */
+export const daySlots = (s: Substance): string[] => dayDoses(s).map((d) => d.slot);
 
 /** Most recent dates this substance is scheduled (today-or-earlier, on/after it was added), newest first. */
 export function recentScheduledDates(sub: Substance, count: number, now = new Date()): string[] {
@@ -466,11 +493,17 @@ export interface HistoryEntry {
 export function doseHistory(sub: Substance, logs: LogMap, count = 6, now = new Date()): HistoryEntry[] {
   const todayIso = isoDate(now);
   return recentScheduledDates(sub, count, now).map((iso) => {
-    const s = logs[logKey(sub.id, iso)];
+    const sts = daySlots(sub).map((slot) => logs[logKey(sub.id, iso, slot)]);
+    const status: HistoryStatus =
+      sts.every((s) => s === 'taken') ? 'taken'
+      : sts.every((s) => s === 'skipped') ? 'skipped'
+      : sts.some((s) => s === 'taken' || s === 'skipped') ? 'taken' // partially-handled past day
+      : iso === todayIso ? 'pending'
+      : 'missed';
     return {
       iso,
       label: new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      status: s === 'taken' ? 'taken' : s === 'skipped' ? 'skipped' : iso === todayIso ? 'pending' : 'missed',
+      status,
     };
   });
 }
@@ -491,10 +524,12 @@ export function adherence(subs: Substance[], logs: LogMap, days: number, now = n
     const iso = isoDate(d);
     for (const sub of subs) {
       if (!isDueOn(sub, iso)) continue;
-      const s = logs[logKey(sub.id, iso)];
-      if (s === 'taken') taken++;
-      else if (s === 'skipped') skipped++;
-      else if (iso < todayIso) missed++; // today's pending doses don't count as missed yet
+      for (const slot of daySlots(sub)) {
+        const s = logs[logKey(sub.id, iso, slot)];
+        if (s === 'taken') taken++;
+        else if (s === 'skipped') skipped++;
+        else if (iso < todayIso) missed++; // today's pending doses don't count as missed yet
+      }
     }
     d.setDate(d.getDate() - 1);
   }
@@ -512,7 +547,7 @@ export function streak(subs: Substance[], logs: LogMap, now = new Date()): numbe
     const due = subs.filter((s) => isDueOn(s, iso));
     d.setDate(d.getDate() - 1);
     if (!due.length) continue; // rest day — doesn't break or extend the streak
-    const statuses = due.map((s) => logs[logKey(s.id, iso)]);
+    const statuses = due.flatMap((s) => daySlots(s).map((slot) => logs[logKey(s.id, iso, slot)]));
     const allHandled = statuses.every((s) => s === 'taken' || s === 'skipped');
     const anyTaken = statuses.some((s) => s === 'taken');
     if (allHandled && anyTaken) { count++; continue; }
@@ -530,11 +565,12 @@ export function dayStatus(subs: Substance[], logs: LogMap, iso: string, now = ne
   if (iso > todayIso) return 'future';
   const due = subs.filter((s) => isDueOn(s, iso));
   if (!due.length) return 'none';
-  const st = due.map((s) => logs[logKey(s.id, iso)]);
+  const st = due.flatMap((s) => daySlots(s).map((slot) => logs[logKey(s.id, iso, slot)]));
+  const total = st.length;
   const taken = st.filter((x) => x === 'taken').length;
   const handled = st.filter((x) => x === 'taken' || x === 'skipped').length;
-  if (taken === due.length) return 'done';
-  if (taken > 0 || handled === due.length) return 'partial';
+  if (taken === total) return 'done';
+  if (taken > 0 || handled === total) return 'partial';
   return iso === todayIso ? 'pending' : 'missed';
 }
 

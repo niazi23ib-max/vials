@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { doseDecrementOn, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
+import { daySlots, doseDecrementOn, fullAmount, isDueOn, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
 import type { BodyMetric } from '@/lib/metrics';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
@@ -111,7 +111,7 @@ export function VialApp() {
     const siteMap: Record<string, string> = {};
     const consMap: Record<string, boolean> = {};
     rows.forEach((l) => {
-      const k = logKey(l.substance_id, l.scheduled_date);
+      const k = logKey(l.substance_id, l.scheduled_date, l.slot);
       map[k] = l.status;
       if (l.site) siteMap[k] = l.site;
       if (l.status === 'taken') consMap[k] = l.consumed !== false; // default true (legacy)
@@ -179,10 +179,10 @@ export function VialApp() {
   // `affectInventory` controls whether a "taken" dose pulls from the current vial.
   // Today's doses default to true; backfilled past doses can opt out. We remember
   // per-log whether it consumed, so clearing it only restores when it actually did.
-  const setStatus = useCallback(async (subId: string, iso: string, status: DoseStatus | null, site?: string | null, affectInventory = true) => {
+  const setStatus = useCallback(async (subId: string, iso: string, slot: string, status: DoseStatus | null, site?: string | null, affectInventory = true) => {
     const sub = subs.find((s) => s.id === subId);
     if (!sub) return;
-    const key = logKey(subId, iso);
+    const key = logKey(subId, iso, slot);
     const prev = logs[key];
     const siteChanged = status === 'taken' && site != null && sites[key] !== site;
     if (prev === (status ?? undefined) && !siteChanged) return;
@@ -219,8 +219,8 @@ export function VialApp() {
     if (remainingChanged) setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
 
     try {
-      if (status === null) await db.deleteLog(subId, iso);
-      else await db.setLog(subId, iso, status, site, willConsume);
+      if (status === null) await db.deleteLog(subId, iso, slot);
+      else await db.setLog(subId, iso, status, site, willConsume, slot);
       if (remainingChanged) await db.updateRemaining(subId, newRemaining);
     } catch {
       loadData(); // revert to server truth on failure
@@ -239,12 +239,16 @@ export function VialApp() {
     await createClient().auth.signOut();
   }, []);
 
-  const statusOf = useCallback((subId: string, iso: string) => logs[logKey(subId, iso)], [logs]);
+  const statusOf = useCallback((subId: string, iso: string, slot = '') => logs[logKey(subId, iso, slot)], [logs]);
 
   const takenToday = useMemo(() => {
     const set = new Set<string>();
     for (const sub of subs) {
-      if (logs[logKey(sub.id, todayISO)] === 'taken') set.add(sub.id + '-today');
+      if (!isDueOn(sub, todayISO)) continue;
+      for (const slot of daySlots(sub)) {
+        const k = logKey(sub.id, todayISO, slot);
+        if (logs[k] === 'taken') set.add(k);
+      }
     }
     return set;
   }, [subs, logs, todayISO]);
@@ -260,14 +264,15 @@ export function VialApp() {
   }, [sites]);
 
   const toggle = useCallback((eid: string) => {
-    const subId = eid.replace('-today', '');
-    setStatus(subId, todayISO, statusOf(subId, todayISO) === 'taken' ? null : 'taken');
-  }, [setStatus, statusOf, todayISO]);
+    // eid is the dose's logKey: `${subId}|${iso}` or `${subId}|${iso}|${slot}`.
+    const [subId, iso, slot = ''] = eid.split('|');
+    setStatus(subId, iso, slot, statusOf(subId, iso, slot) === 'taken' ? null : 'taken');
+  }, [setStatus, statusOf]);
   const open = useCallback((subId: string) => setDetailId(subId), []);
   const log = useCallback((subId?: string) => setSheet({ open: true, subId: subId ?? null }), []);
   const openLog = useCallback(() => setSheet({ open: true, subId: null }), []);
-  const confirmLog = useCallback((subId: string, site?: string | null) => setStatus(subId, todayISO, 'taken', site), [setStatus, todayISO]);
-  const skipLog = useCallback((subId?: string) => { if (subId) setStatus(subId, todayISO, 'skipped'); }, [setStatus, todayISO]);
+  const confirmLog = useCallback((subId: string, slot = '', site?: string | null) => setStatus(subId, todayISO, slot, 'taken', site), [setStatus, todayISO]);
+  const skipLog = useCallback((subId?: string, slot = '') => { if (subId) setStatus(subId, todayISO, slot, 'skipped'); }, [setStatus, todayISO]);
   const addSubstance = useCallback(async (sub: Substance) => {
     const created = await db.createSubstance(sub);
     setSubs((prev) => [...prev, created]);

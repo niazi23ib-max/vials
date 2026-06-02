@@ -3,7 +3,7 @@
 import { memo, useMemo, type ReactNode } from 'react';
 import {
   doseLabelOn, daysLeft, stockStatus, expiryStatus, daysUntil, fillPct, fmtExpiry,
-  greeting, isDueOn, isoDate, reconStatus, reconDaysLeft, type Substance,
+  greeting, isDueOn, isoDate, reconStatus, reconDaysLeft, dayDoses, logKey, type Substance,
 } from '@/lib/substances';
 import { Monogram, Label, Icon, VialFill } from './ui';
 import type { AppApi } from './types';
@@ -73,7 +73,10 @@ export const TodayScreen = memo(function TodayScreen({ app }: { app: AppApi }) {
   // changes, not on every parent render.
   const events: Ev[] = useMemo(() => app.substances
     .filter((s) => isDueOn(s, todayISO))
-    .map((s) => ({ id: s.id + '-today', subId: s.id, name: s.name, hue: s.hue, dose: doseLabelOn(s, todayISO), time: s.time, period: s.period, route: s.route }))
+    .flatMap((s) => dayDoses(s).map((d) => ({
+      id: logKey(s.id, todayISO, d.slot), subId: s.id, name: s.name, hue: s.hue,
+      dose: doseLabelOn(s, todayISO), time: d.time, period: d.period, route: s.route,
+    })))
     .sort((a, b) => a.time.localeCompare(b.time)), [app.substances, todayISO]);
 
   const total = events.length;
