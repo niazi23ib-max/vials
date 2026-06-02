@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from 'react';
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, daysUntil, fmtMoney, type Substance,
 } from '@/lib/substances';
-import { VialFill, Label, Chip } from './ui';
+import { VialFill, Label, Chip, Icon } from './ui';
 import type { AppApi } from './types';
 
 function Stat({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
@@ -75,9 +75,17 @@ export function InventoryScreen({ app }: { app: AppApi }) {
 
   return (
     <div style={{ paddingTop: 56, paddingBottom: 96 }}>
-      <div style={{ padding: '0 20px' }}>
-        <Label>Inventory · {app.substances.length} vials</Label>
-        <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 32, color: 'var(--text)', margin: '8px 0 0' }}>Vials</h1>
+      <div style={{ padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
+        <div>
+          <Label>Inventory · {app.substances.length} vials</Label>
+          <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 32, color: 'var(--text)', margin: '8px 0 0' }}>Vials</h1>
+        </div>
+        <button
+          onClick={app.openAddVial}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--amber)', color: 'var(--bg)', border: 'none', borderRadius: 999, padding: '9px 14px', fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+        >
+          <Icon.plus width={16} height={16} /> Add vial
+        </button>
       </div>
 
       <div style={{ display: 'flex', gap: 10, padding: '18px 20px 0' }}>

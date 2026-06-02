@@ -14,4 +14,8 @@ export interface AppApi {
   /** Confirm today's dose for a substance. */
   confirmLog: (subId: string) => void;
   skipLog: (subId?: string) => void;
+  /** Add a new vial/substance to the inventory. */
+  addSubstance: (s: Substance) => void;
+  /** Open the "add vial" sheet. */
+  openAddVial: () => void;
 }

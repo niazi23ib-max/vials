@@ -29,12 +29,22 @@
 html,
 body {
   margin: 0;
-  min-height: 100%;
+  height: 100%;
+  /* Only the in-app scroll container should scroll; lock the document so the
+     page itself can't bounce/rubber-band and reveal blank space. */
+  overflow: hidden;
+  /* Stop overscroll chaining/glow to the document. */
+  overscroll-behavior: none;
+}
+
+/* Solid dark base so any native overscroll region paints dark, never white.
+   Matches the dark end of the body gradient. */
+html {
+  background-color: #0b0907;
 }
 
 body {
   background: radial-gradient(120% 90% at 50% 0%, #1a1611, #0b0907 70%);
-  background-attachment: fixed;
   font-family: var(--sans);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -94,4 +104,18 @@ input[type="range"]::-moz-range-thumb {
   to {
     transform: translateX(0);
   }
+}
+
+/* Form fields (add-vial sheet) */
+.vlf::placeholder {
+  color: var(--text-faint);
+}
+.vlf:focus {
+  border-color: var(--amber) !important;
+  outline: none;
+}
+/* Date/time picker indicator visible on dark surfaces */
+.vlf::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
 }

@@ -226,6 +226,30 @@ export function doseLabel(s: Substance): string {
 
 export const fmtMoney = (n: number) => '$' + n.toLocaleString('en-US');
 export function fmtExpiry(dateStr: string): string {
+  if (!dateStr) return '—';
   const d = new Date(dateStr + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+// ── New-vial helpers ─────────────────────────────────────────────
+/** Distinct oklch hues for new vials' fill + monogram. */
+export const HUE_PALETTE = [62, 28, 88, 152, 200, 264, 320, 12, 110, 234];
+export const pickHue = (index: number) => HUE_PALETTE[index % HUE_PALETTE.length];
+
+/** A stable-ish unique id for a user-created substance. */
+export function newId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch {
+    /* ignore */
+  }
+  return 'sub-' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+}
+
+/** Default beyond-use date: one year out, as yyyy-mm-dd. */
+export function defaultExpiryISO(now = new Date()): string {
+  const d = new Date(now);
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().slice(0, 10);
 }

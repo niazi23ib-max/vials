@@ -1,7 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { SEED_SUBSTANCES, type Substance } from '@/lib/substances';
+import { useCallback, useEffect, useState } from 'react';
+import type { Substance } from '@/lib/substances';
+import { isSupabaseConfigured } from '@/lib/supabase/config';
+import { createClient } from '@/lib/supabase/client';
+import { useSession } from '@/lib/useSession';
+import * as db from '@/lib/db';
 import { Icon } from './ui';
 import type { AppApi } from './types';
 import { TodayScreen } from './Today';
@@ -10,64 +14,12 @@ import { InventoryScreen } from './Inventory';
 import { CalculatorScreen } from './Calculator';
 import { DetailScreen } from './Detail';
 import { LogSheet } from './LogSheet';
+import { AddVialSheet } from './AddVialSheet';
+import { Login } from './Login';
 
-const STORAGE_KEY = 'vial.taken';
-
-function applyDelta(subs: Substance[], eid: string, on: boolean): Substance[] {
-  const subId = eid.replace('-today', '');
-  return subs.map((s) => {
-    if (s.id !== subId) return s;
-    const total = s.vialMg * 1000;
-    const remaining = on
-      ? Math.max(0, s.remaining - s.doseMcg)
-      : Math.min(total, s.remaining + s.doseMcg);
-    return { ...s, remaining };
-  });
-}
-
-interface State {
-  subs: Substance[];
-  taken: Set<string>;
-}
-type Action =
-  | { type: 'restore'; set: Set<string> }
-  | { type: 'add'; eid: string }
-  | { type: 'toggle'; eid: string };
-
-function freshSubs(): Substance[] {
-  return SEED_SUBSTANCES.map((s) => ({ ...s }));
-}
-
-function reducer(state: State, action: Action): State {
-  switch (action.type) {
-    case 'restore': {
-      let subs = freshSubs();
-      action.set.forEach((eid) => {
-        subs = applyDelta(subs, eid, true);
-      });
-      return { subs, taken: action.set };
-    }
-    case 'add': {
-      if (state.taken.has(action.eid)) return state;
-      const taken = new Set(state.taken);
-      taken.add(action.eid);
-      return { subs: applyDelta(state.subs, action.eid, true), taken };
-    }
-    case 'toggle': {
-      const taken = new Set(state.taken);
-      let subs: Substance[];
-      if (taken.has(action.eid)) {
-        taken.delete(action.eid);
-        subs = applyDelta(state.subs, action.eid, false);
-      } else {
-        taken.add(action.eid);
-        subs = applyDelta(state.subs, action.eid, true);
-      }
-      return { subs, taken };
-    }
-    default:
-      return state;
-  }
+function todayLocalISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const TABS = [
@@ -92,78 +44,159 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
   );
 }
 
+const shell: React.CSSProperties = {
+  position: 'relative',
+  width: '100%',
+  maxWidth: 440,
+  height: '100dvh',
+  margin: '0 auto',
+  overflow: 'hidden',
+  background: 'var(--bg)',
+  boxShadow: '0 0 80px rgba(0,0,0,0.35)',
+};
+
 export function VialApp() {
-  const [state, dispatch] = useReducer(reducer, undefined, () => ({ subs: freshSubs(), taken: new Set<string>() }));
-  const [ready, setReady] = useState(false);
-  const restored = useRef(false);
+  const { user, loading, configured } = useSession();
+  const todayISO = todayLocalISO();
+
+  const [subs, setSubs] = useState<Substance[]>([]);
+  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [dataLoading, setDataLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<TabKey>('today');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [sheet, setSheet] = useState<{ open: boolean; subId: string | null }>({ open: false, subId: null });
+  const [addOpen, setAddOpen] = useState(false);
 
-  // Restore persisted doses on mount (also gates first paint to avoid
-  // hydration mismatches from localStorage + current-date rendering).
+  const loadData = useCallback(async () => {
+    const [s, logs] = await Promise.all([db.listSubstances(), db.listLogsForDate(todayISO)]);
+    setSubs(s);
+    const set = new Set<string>();
+    logs.forEach((l) => {
+      if (l.status === 'taken') set.add(l.substance_id + '-today');
+    });
+    setTaken(set);
+  }, [todayISO]);
+
   useEffect(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      dispatch({ type: 'restore', set: new Set<string>(raw) });
-    } catch {
-      /* ignore */
+    if (!user) {
+      setSubs([]);
+      setTaken(new Set());
+      setDataLoading(false);
+      return;
     }
-    restored.current = true;
-    setReady(true);
-  }, []);
+    let cancelled = false;
+    setDataLoading(true);
+    setLoadError(null);
+    loadData()
+      .catch((e) => {
+        if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Failed to load your data.');
+      })
+      .finally(() => {
+        if (!cancelled) setDataLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, loadData]);
 
-  // Persist whenever logged doses change (after the initial restore).
-  useEffect(() => {
-    if (!restored.current) return;
+  async function applyTaken(subId: string, makeTaken: boolean) {
+    const sub = subs.find((s) => s.id === subId);
+    if (!sub) return;
+    const eid = subId + '-today';
+    if (taken.has(eid) === makeTaken) return;
+    const newRemaining = makeTaken
+      ? Math.max(0, sub.remaining - sub.doseMcg)
+      : Math.min(sub.vialMg * 1000, sub.remaining + sub.doseMcg);
+
+    // optimistic
+    setTaken((prev) => {
+      const n = new Set(prev);
+      if (makeTaken) n.add(eid);
+      else n.delete(eid);
+      return n;
+    });
+    setSubs((prev) => prev.map((s) => (s.id === subId ? { ...s, remaining: newRemaining } : s)));
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([...state.taken]));
+      if (makeTaken) await db.setLog(subId, todayISO, 'taken');
+      else await db.deleteLog(subId, todayISO);
+      await db.updateRemaining(subId, newRemaining);
     } catch {
-      /* ignore */
+      loadData(); // revert to server truth on failure
     }
-  }, [state.taken]);
+  }
 
-  const back = useCallback(() => {
+  function back() {
     setClosing(true);
     setTimeout(() => {
       setDetailId(null);
       setClosing(false);
     }, 300);
-  }, []);
+  }
+
+  async function signOut() {
+    await createClient().auth.signOut();
+  }
 
   const app: AppApi = {
-    substances: state.subs,
-    taken: state.taken,
-    toggle: (eid) => dispatch({ type: 'toggle', eid }),
+    substances: subs,
+    taken,
+    toggle: (eid) => applyTaken(eid.replace('-today', ''), !taken.has(eid)),
     open: (subId) => setDetailId(subId),
     log: (subId) => setSheet({ open: true, subId: subId ?? null }),
     openLog: () => setSheet({ open: true, subId: null }),
-    confirmLog: (subId) => dispatch({ type: 'add', eid: subId + '-today' }),
+    confirmLog: (subId) => applyTaken(subId, true),
     skipLog: () => {},
+    addSubstance: async (sub) => {
+      const created = await db.createSubstance(sub);
+      setSubs((prev) => [...prev, created]);
+    },
+    openAddVial: () => setAddOpen(true),
   };
 
-  const sub = state.subs.find((s) => s.id === detailId);
-
-  const shell: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    maxWidth: 440,
-    height: '100dvh',
-    margin: '0 auto',
-    overflow: 'hidden',
-    background: 'var(--bg)',
-    boxShadow: '0 0 80px rgba(0,0,0,0.35)',
-  };
-
-  if (!ready) {
-    return <div style={shell} aria-hidden />;
+  // ---- Gating ----
+  if (!configured) {
+    return (
+      <div style={shell}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28, textAlign: 'center' }}>
+          <p style={{ fontFamily: 'var(--mono)', fontSize: 12.5, color: 'var(--text-dim)', lineHeight: 1.6 }}>
+            Supabase isn&apos;t configured. Add NEXT_PUBLIC_SUPABASE_URL and
+            NEXT_PUBLIC_SUPABASE_ANON_KEY to enable accounts.
+          </p>
+        </div>
+      </div>
+    );
   }
+
+  if (loading) return <div style={shell} aria-hidden />;
+  if (!user) return <Login />;
+  if (dataLoading) return <div style={shell} aria-hidden />;
+
+  const sub = subs.find((s) => s.id === detailId);
 
   return (
     <div style={shell}>
-      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* sign out */}
+      <button
+        onClick={signOut}
+        aria-label="Sign out"
+        style={{ position: 'absolute', top: 14, right: 14, zIndex: 35, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+      >
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+          <path d="M6 2H3.5A1.5 1.5 0 002 3.5v9A1.5 1.5 0 003.5 14H6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          <path d="M10.5 11l3-3-3-3M13 8H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch' }}>
+        {loadError && (
+          <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
+            {loadError}
+          </div>
+        )}
         {tab === 'today' && <TodayScreen app={app} />}
         {tab === 'schedule' && <ScheduleScreen app={app} />}
         {tab === 'vials' && <InventoryScreen app={app} />}
@@ -173,7 +206,7 @@ export function VialApp() {
       {sub && (
         <div
           style={{
-            position: 'absolute', inset: 0, overflowY: 'auto', background: 'var(--bg)', zIndex: 40,
+            position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', zIndex: 40,
             transform: closing ? 'translateX(100%)' : 'translateX(0)',
             animation: closing ? 'none' : 'slideIn .32s cubic-bezier(.32,.72,0,1)',
             transition: closing ? 'transform .3s cubic-bezier(.32,.72,0,1)' : 'none',
@@ -202,6 +235,7 @@ export function VialApp() {
       </div>
 
       <LogSheet open={sheet.open} subId={sheet.subId} app={app} onClose={() => setSheet({ open: false, subId: null })} />
+      <AddVialSheet open={addOpen} onClose={() => setAddOpen(false)} app={app} />
     </div>
   );
 }
