@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b21';
+const BUILD = 'b22';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -188,10 +188,10 @@ export function VialApp() {
       const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
       const sab = px('p-sab');
       const lvh = px('p-lvh');
-      // How far the 100lvh shell overflows the visible viewport — content below this
-      // fold is off-screen, so push the nav's content up by it (+ home-indicator inset).
-      const overflow = lvh > 0 ? Math.max(0, lvh - ih) : 0;
-      const navpad = overflow + Math.max(sab, 0) + 12;
+      // The full 100lvh screen is visible (confirmed on-device: nav rendered 792–956 and
+      // was fully shown), so the only bottom obstacle is the home indicator. Pad just
+      // enough to clear it + small breathing, so the tabs sit snug near the bottom edge.
+      const navpad = Math.max(sab, 0) + 18;
       document.documentElement.style.setProperty('--navpad', `${navpad}px`);
       setDiag(`ih${ih} lvh${lvh} svh${px('p-svh')} sab${sab} scr${scr} np${navpad} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
     };
@@ -419,7 +419,7 @@ export function VialApp() {
       {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
           flex-column shell. Its background fills the home-indicator safe area via
           padding-bottom: env(safe-area-inset-bottom). */}
-      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 108px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 52px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
