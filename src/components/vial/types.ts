@@ -1,4 +1,5 @@
 import type { Substance, LogMap, DoseStatus } from '@/lib/substances';
+import type { BodyMetric } from '@/lib/metrics';
 
 /** The shared controller passed to every screen (mirrors the prototype's `app`). */
 export interface AppApi {
@@ -35,4 +36,11 @@ export interface AppApi {
   updateSubstance: (id: string, s: Substance) => void;
   /** Delete a vial from the inventory. */
   deleteSubstance: (id: string) => void;
+
+  /** Body-metric entries (weight/waist/body-fat), oldest → newest. */
+  metrics: BodyMetric[];
+  /** Insert or update the body-metric entry for a day (one per date). */
+  saveMetric: (date: string, fields: { weight: number | null; waist: number | null; bodyFat: number | null; note: string }) => void;
+  /** Remove the body-metric entry for a day. */
+  removeMetric: (date: string) => void;
 }

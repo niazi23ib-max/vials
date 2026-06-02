@@ -146,6 +146,12 @@ export const Icon = {
   calc: (p: IconProps) => (
     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" {...p}><rect x="4.5" y="3" width="13" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" /><line x1="4.5" y1="8" x2="17.5" y2="8" stroke="currentColor" strokeWidth="1.4" /><circle cx="8.3" cy="12" r="1" fill="currentColor" /><circle cx="13.7" cy="12" r="1" fill="currentColor" /><circle cx="8.3" cy="15.5" r="1" fill="currentColor" /><circle cx="13.7" cy="15.5" r="1" fill="currentColor" /></svg>
   ),
+  progress: (p: IconProps) => (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" {...p}><path d="M4 14.5l4.5-4.5 3 3L18 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 6.5h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  ),
+  trash: (p: IconProps) => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" {...p}><path d="M3 4.5h10M6.5 4.5V3.2A1 1 0 017.5 2.2h1a1 1 0 011 1v1.3M4 4.5l.6 8a1 1 0 001 .9h4.8a1 1 0 001-.9l.6-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  ),
   plus: (p: IconProps) => (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" {...p}><line x1="12" y1="6" x2="12" y2="18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /><line x1="6" y1="12" x2="18" y2="12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
   ),

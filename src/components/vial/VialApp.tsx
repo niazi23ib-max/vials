@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { doseDecrementOn, fullAmount, isoDate, logKey, type Substance, type LogMap, type DoseStatus } from '@/lib/substances';
+import type { BodyMetric } from '@/lib/metrics';
 import { isSupabaseConfigured } from '@/lib/supabase/config';
 import { createClient } from '@/lib/supabase/client';
 import { useSession } from '@/lib/useSession';
@@ -12,6 +13,7 @@ import { TodayScreen } from './Today';
 import { ScheduleScreen } from './Schedule';
 import { InventoryScreen } from './Inventory';
 import { CalculatorScreen } from './Calculator';
+import { ProgressScreen } from './Progress';
 import { DetailScreen } from './Detail';
 import { LogSheet } from './LogSheet';
 import { AddVialSheet } from './AddVialSheet';
@@ -20,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b16';
+const BUILD = 'b17';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -30,6 +32,7 @@ function todayLocalISO(): string {
 const TABS = [
   { k: 'today', label: 'Today', icon: Icon.today },
   { k: 'schedule', label: 'Schedule', icon: Icon.schedule },
+  { k: 'progress', label: 'Progress', icon: Icon.progress },
   { k: 'vials', label: 'Vials', icon: Icon.vials },
   { k: 'calc', label: 'Calc', icon: Icon.calc },
 ] as const;
@@ -50,21 +53,26 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
 }
 
 const shell: React.CSSProperties = {
-  // Pin to the actual viewport (top→bottom) rather than relying on 100dvh in
-  // normal flow — on iOS the document's layout-viewport height and the dynamic
-  // viewport differ, which left a gap below the nav. position:fixed + inset
-  // makes the shell own the full visible viewport, so the bottom bar reaches
-  // the bottom edge in both Safari and the installed PWA.
-  position: 'relative',
+  // The app is edge-to-edge (viewport-fit=cover), so the real screen is the LARGE
+  // viewport, not the small one. On the test device (iPhone 16 Pro Max) svh=894 but
+  // lvh=956 — and 956-894 = 62 = the top safe-area inset. That 62px shortfall was the
+  // empty strip at the bottom: a shell sized to 100svh stops short of the screen.
+  // Pinning with position:fixed + inset:0 makes the shell own the full-screen box
+  // (the initial containing block == the cover viewport), so the bottom bar always
+  // reaches the physical bottom edge no matter how iOS resolves svh/lvh/dvh.
+  // Centering is margin:auto (NOT transform) so absolute children + sheet overlays
+  // still anchor to the shell. overflow:hidden here + overflowX:hidden on the scroll
+  // area eliminate the earlier side-to-side drift.
+  position: 'fixed',
+  top: 0,
+  bottom: 0,
+  left: 0,
+  right: 0,
+  margin: '0 auto',
   width: '100%',
   maxWidth: 440,
-  // 100svh = the visible viewport on this device (confirmed: svh === innerHeight).
-  // Flex column: the scroll area flexes and the nav is an in-flow row pinned at the
-  // bottom — no absolute/fixed positioning, so nothing can overflow or be clipped.
-  height: '100svh',
   display: 'flex',
   flexDirection: 'column',
-  margin: '0 auto',
   overflow: 'hidden',
   overscrollBehavior: 'none',
   background: 'var(--bg)',
@@ -85,6 +93,7 @@ export function VialApp() {
   const [logs, setLogs] = useState<LogMap>({});
   const [sites, setSites] = useState<Record<string, string>>({});
   const [consumedMap, setConsumedMap] = useState<Record<string, boolean>>({});
+  const [metrics, setMetrics] = useState<BodyMetric[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -98,8 +107,9 @@ export function VialApp() {
   const loadData = useCallback(async () => {
     const since = new Date();
     since.setDate(since.getDate() - 120);
-    const [s, rows] = await Promise.all([db.listSubstances(), db.listLogs(isoDate(since))]);
+    const [s, rows, mets] = await Promise.all([db.listSubstances(), db.listLogs(isoDate(since)), db.listMetrics()]);
     setSubs(s);
+    setMetrics(mets);
     const map: LogMap = {};
     const siteMap: Record<string, string> = {};
     const consMap: Record<string, boolean> = {};
@@ -120,6 +130,7 @@ export function VialApp() {
       setLogs({});
       setSites({});
       setConsumedMap({});
+      setMetrics([]);
       setDataLoading(false);
       return;
     }
@@ -163,11 +174,18 @@ export function VialApp() {
       const el = document.getElementById(id);
       return el ? Math.round(el.getBoundingClientRect().height) : -1;
     };
+    const rect = (id: string) => {
+      const el = document.getElementById(id);
+      if (!el) return 'na';
+      const r = el.getBoundingClientRect();
+      return `${Math.round(r.top)}-${Math.round(r.bottom)}`;
+    };
     const read = () => {
       const ih = Math.round(window.innerHeight);
-      const vv = window.visualViewport ? Math.round(window.visualViewport.height) : -1;
-      const cl = document.documentElement.clientHeight;
-      setDiag(`ih${ih} vv${vv} cl${cl} svh${px('p-svh')} dvh${px('p-dvh')} lvh${px('p-lvh')} sab${px('p-sab')} sat${px('p-sat')}`);
+      const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
+      // sh/nv = rendered top-bottom of the shell + nav. If nv's bottom == scr, the bar
+      // reaches the physical screen edge (the real fix-confirmation signal).
+      setDiag(`ih${ih} lvh${px('p-lvh')} svh${px('p-svh')} sat${px('p-sat')} sab${px('p-sab')} scr${scr} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
     };
     read();
     const t = setTimeout(read, 600);
@@ -300,6 +318,15 @@ export function VialApp() {
         setClosing(false);
       }
     },
+    metrics,
+    saveMetric: async (date, fields) => {
+      const saved = await db.upsertMetric(date, fields);
+      setMetrics((prev) => [...prev.filter((m) => m.date !== date), saved].sort((a, b) => a.date.localeCompare(b.date)));
+    },
+    removeMetric: async (date) => {
+      await db.deleteMetric(date);
+      setMetrics((prev) => prev.filter((m) => m.date !== date));
+    },
   };
 
   // ---- Gating ----
@@ -324,7 +351,7 @@ export function VialApp() {
   const sub = subs.find((s) => s.id === detailId);
 
   return (
-    <div style={shell}>
+    <div id="vial-shell" style={shell}>
       {/* Hidden probes to measure how this device resolves viewport units + safe areas. */}
       <div id="p-svh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100svh', opacity: 0, pointerEvents: 'none' }} />
       <div id="p-dvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100dvh', opacity: 0, pointerEvents: 'none' }} />
@@ -355,6 +382,7 @@ export function VialApp() {
         )}
         {tab === 'today' && <TodayScreen app={app} />}
         {tab === 'schedule' && <ScheduleScreen app={app} />}
+        {tab === 'progress' && <ProgressScreen app={app} />}
         {tab === 'vials' && <InventoryScreen app={app} />}
         {tab === 'calc' && <CalculatorScreen app={app} />}
       </div>
@@ -376,19 +404,20 @@ export function VialApp() {
       {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
           flex-column shell. Its background fills the home-indicator safe area via
           padding-bottom: env(safe-area-inset-bottom). */}
-      <div style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
           <button
             onClick={app.openLog}
             aria-label="Log a dose"
-            style={{ width: 52, height: 52, margin: '0 6px', borderRadius: '50%', border: '3px solid var(--surface-2)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)', marginTop: -22 }}
+            style={{ width: 50, height: 50, marginLeft: 4, marginRight: 4, marginTop: -22, borderRadius: '50%', border: '3px solid var(--surface-2)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)' }}
           >
             <Icon.plus />
           </button>
-          <NavBtn tab={TABS[2]} active={tab === 'vials'} onClick={() => setTab('vials')} />
-          <NavBtn tab={TABS[3]} active={tab === 'calc'} onClick={() => setTab('calc')} />
+          <NavBtn tab={TABS[2]} active={tab === 'progress'} onClick={() => setTab('progress')} />
+          <NavBtn tab={TABS[3]} active={tab === 'vials'} onClick={() => setTab('vials')} />
+          <NavBtn tab={TABS[4]} active={tab === 'calc'} onClick={() => setTab('calc')} />
         </div>
       </div>
 

@@ -4,6 +4,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import type { Substance, TitrationStep } from '@/lib/substances';
+import type { BodyMetric } from '@/lib/metrics';
 
 interface SubRow {
   id: string;
@@ -209,5 +210,60 @@ export async function deleteLog(substanceId: string, dateISO: string): Promise<v
     .delete()
     .eq('substance_id', substanceId)
     .eq('scheduled_date', dateISO);
+  if (error) throw error;
+}
+
+/* ---------------------------- Body metrics ---------------------------- */
+interface BodyMetricRow {
+  id: string;
+  date: string;
+  weight: number | string | null;
+  waist: number | string | null;
+  body_fat: number | string | null;
+  note: string | null;
+}
+const numOrNull = (v: number | string | null): number | null =>
+  v == null || v === '' ? null : Number(v);
+
+function rowToMetric(r: BodyMetricRow): BodyMetric {
+  return {
+    id: r.id,
+    date: r.date,
+    weight: numOrNull(r.weight),
+    waist: numOrNull(r.waist),
+    bodyFat: numOrNull(r.body_fat),
+    note: r.note ?? '',
+  };
+}
+
+export async function listMetrics(): Promise<BodyMetric[]> {
+  const { data, error } = await createClient()
+    .from('body_metrics')
+    .select('id,date,weight,waist,body_fat,note')
+    .order('date', { ascending: true });
+  if (error) throw error;
+  return (data as BodyMetricRow[]).map(rowToMetric);
+}
+
+/** Insert or update the entry for a given day (one row per user per date). */
+export async function upsertMetric(
+  date: string,
+  fields: { weight: number | null; waist: number | null; bodyFat: number | null; note: string },
+): Promise<BodyMetric> {
+  const user_id = await uid();
+  const { data, error } = await createClient()
+    .from('body_metrics')
+    .upsert(
+      { user_id, date, weight: fields.weight, waist: fields.waist, body_fat: fields.bodyFat, note: fields.note || null },
+      { onConflict: 'user_id,date' },
+    )
+    .select('id,date,weight,waist,body_fat,note')
+    .single();
+  if (error) throw error;
+  return rowToMetric(data as BodyMetricRow);
+}
+
+export async function deleteMetric(date: string): Promise<void> {
+  const { error } = await createClient().from('body_metrics').delete().eq('date', date);
   if (error) throw error;
 }
