@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b25';
+const BUILD = 'b26';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -53,20 +53,17 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
 }
 
 const shell: React.CSSProperties = {
-  // iOS standalone PWA (viewport-fit=cover) viewport model — CONFIRMED on-device:
-  //   innerHeight == 100svh == 100dvh == 894  → the VISIBLE viewport. Content placed
-  //     below y=894 is NOT shown (b18/b19: nav labels at y≈936/908 were cut off).
-  //   100lvh == screen.height == 956  → the full physical panel.
-  // The shell fills the full 956 (height:100lvh) so its background reaches the physical
-  // bottom edge (no dark gap/strip). Because only the top 894 is visible, the bottom
-  // nav keeps its CONTENT above y=894 via --navpad (= [100lvh − innerHeight] + safe-
-  // bottom + breathing); its background still fills down to the edge. Center via
-  // margin:auto (NOT transform) so fixed children/overlays still anchor to the shell.
+  // iOS standalone PWA viewport — CONFIRMED on-device (b25 magenta-strip test): the
+  // svh→lvh region (894→956) is NOT visible. The usable viewport is innerHeight ==
+  // 100svh == 100dvh == 894; lvh/screen (956) is the physical panel but its bottom
+  // 62px is off-screen in the installed app. So size the shell to the VISIBLE viewport
+  // with position:fixed + inset:0 (resolves to 894 here) and dock the nav at that real
+  // bottom. Center via margin:auto (not transform) so fixed children/overlays anchor here.
   position: 'fixed',
   top: 0,
+  bottom: 0,
   left: 0,
   right: 0,
-  height: '100lvh',
   margin: '0 auto',
   width: '100%',
   maxWidth: 440,
@@ -188,14 +185,10 @@ export function VialApp() {
       const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
       const sab = px('p-sab');
       const lvh = px('p-lvh');
-      // The VISIBLE viewport ends at innerHeight (894): the home indicator + the
-      // 100lvh→innerHeight overflow sit below it, and labels placed there get cut
-      // (b22's navpad=52 → labels at y≈904 → clipped). The nav box bottom is at 100lvh
-      // (956), so to keep labels above the visible fold: navpad = (100lvh − innerHeight)
-      // + safe-bottom + breathing (≈ 62+34+12 = 108). This is the iOS tab-bar pattern:
-      // labels sit just above the home indicator; the bar's bg fills the safe area below.
-      const overflow = lvh > 0 ? Math.max(0, lvh - ih) : 0;
-      const navpad = overflow + Math.max(sab, 0) + 12;
+      // Shell is sized to the visible viewport (inset:0 == innerHeight == 894), so the
+      // nav docks at the real visible bottom. Pad only for the home-indicator safe area
+      // (+ breathing) below the labels — no phantom 956-overflow term needed.
+      const navpad = Math.max(sab, 0) + 14;
       document.documentElement.style.setProperty('--navpad', `${navpad}px`);
       setDiag(`ih${ih} lvh${lvh} svh${px('p-svh')} sab${sab} scr${scr} np${navpad} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
     };
@@ -377,9 +370,6 @@ export function VialApp() {
       <div id="p-lvh" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: '100lvh', opacity: 0, pointerEvents: 'none' }} />
       <div id="p-sab" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-bottom, 0px)', opacity: 0, pointerEvents: 'none' }} />
       <div id="p-sat" style={{ position: 'fixed', top: 0, left: 0, width: 1, height: 'env(safe-area-inset-top, 0px)', opacity: 0, pointerEvents: 'none' }} />
-      {/* DEFINITIVE TEST: this magenta strip occupies the svh→lvh region (894→956). If
-          it's visible at the bottom of the screen, that area is usable; if not, it's off-screen. */}
-      <div style={{ position: 'fixed', left: 0, right: 0, top: '100svh', height: 'calc(100lvh - 100svh)', background: 'rgba(255,0,200,0.65)', zIndex: 100, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--mono)', fontSize: 11, color: '#fff', letterSpacing: '0.04em' }}>svh→lvh · 894→956</div>
       {/* TEMP build + viewport diagnostic readout (top-left). */}
       <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 4px)', left: 'calc(env(safe-area-inset-left, 0px) + 8px)', right: 'calc(env(safe-area-inset-right, 0px) + 48px)', zIndex: 35, fontFamily: 'var(--mono)', fontSize: 9, lineHeight: 1.3, color: 'var(--amber)', pointerEvents: 'none' }}>
         {BUILD} · {diag}
@@ -396,7 +386,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'calc(var(--navpad, 108px) + 48px)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -423,11 +413,10 @@ export function VialApp() {
         </div>
       )}
 
-      {/* bottom nav — a FLOATING translucent bar pinned over the bottom (position:absolute).
-          The scroll area fills the whole shell and scrolls behind it, so content reaches the
-          bottom edge (UpKeep-style). --navpad keeps the labels above the home indicator;
-          the backdrop blur lets content show through behind the bar. */}
-      <div id="vial-nav" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'rgba(22,18,14,0.72)', backdropFilter: 'saturate(160%) blur(22px)', WebkitBackdropFilter: 'saturate(160%) blur(22px)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 108px)', boxShadow: '0 -8px 24px rgba(0,0,0,0.3)' }}>
+      {/* bottom nav — docked at the visible bottom (flexShrink:0). The shell is sized to
+          the visible viewport, so the bar reaches the real bottom edge; --navpad pads it
+          for the home-indicator safe area below the labels. */}
+      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 48px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
