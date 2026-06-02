@@ -7,7 +7,7 @@ import {
   scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite,
   reconStatus, reconDaysLeft, daysSinceRecon, reconBUDDate, type Substance,
 } from '@/lib/substances';
-import { VialFill, Label, Chip, Icon } from './ui';
+import { VialFill, Label, Chip, Icon, Syringe } from './ui';
 import type { AppApi } from './types';
 
 function KV({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -125,6 +125,13 @@ export const DetailScreen = memo(function DetailScreen({ sub, app, onBack }: { s
           <KV label="Expires" value={fmtExpiry(s.expiry)} tone={expiryStatus(s) === 'soon' ? 'var(--amber)' : 'var(--text)'} />
           <KV label="Cost / dose" value={`$${costPerDose.toFixed(2)}`} />
         </div>
+
+        {r && (
+          <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }}>
+            <Label color="var(--text-dim)">Draw to {r.units.toFixed(1)} units</Label>
+            <div style={{ marginTop: 8 }}><Syringe units={r.units} /></div>
+          </div>
+        )}
 
         <div style={{ marginTop: 26 }}>
           <Label>Schedule</Label>

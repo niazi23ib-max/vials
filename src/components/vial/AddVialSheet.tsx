@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  recon, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
+  recon, suggestReconOptions, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
   addDaysISO, daysUntil, RECON_DEFAULT_BUD,
   type Substance, type ScheduleKind,
 } from '@/lib/substances';
@@ -312,6 +312,8 @@ export function AddVialSheet({
   const doseRaw = doseValue === '' ? 0 : Number(doseValue);
   const doseMcgInject = doseUnit === 'mg' ? doseRaw * 1000 : doseRaw; // mcg (inject/dose)
   const preview = form === 'inject' && mg > 0 && bac > 0 && doseMcgInject > 0 ? recon(mg, bac, doseMcgInject) : null;
+  // Suggest the BAC volume that makes each dose land on a clean syringe mark.
+  const bacSuggestion = form === 'inject' && mg > 0 && doseMcgInject > 0 ? (suggestReconOptions(mg, doseMcgInject)[0] ?? null) : null;
 
   // Reconstitution shelf-life preview (inject form).
   const budN = Number(budDaysStr) > 0 ? Math.floor(Number(budDaysStr)) : RECON_DEFAULT_BUD;
@@ -495,6 +497,12 @@ export function AddVialSheet({
                       <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
                       <span style={adorn}>mL</span>
                     </div>
+                    {bacSuggestion && String(bacSuggestion.bacMl) !== bacMl && (
+                      <button type="button" onClick={() => setBacMl(String(bacSuggestion.bacMl))}
+                        style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, border: '1px solid var(--amber)', background: 'var(--amber-soft)', color: 'var(--amber)', fontFamily: 'var(--mono)', fontSize: 10.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        ✦ {bacSuggestion.bacMl} mL → {bacSuggestion.round ? bacSuggestion.units.toFixed(0) : bacSuggestion.units.toFixed(1)}u
+                      </button>
+                    )}
                   </Fld>
                 </div>
               )}
