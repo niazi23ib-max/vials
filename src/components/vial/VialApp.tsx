@@ -22,7 +22,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b20';
+const BUILD = 'b21';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -53,17 +53,15 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
 }
 
 const shell: React.CSSProperties = {
-  // CONFIRMED on the test device (b17 readout): a position:fixed + inset:0 shell
-  // rendered 0–894 — iOS anchors the fixed containing block to the SMALL viewport
-  // (894), NOT the full screen. But the physical screen is 956 (scr956 === lvh956),
-  // so inset:0 left a 62px gap at the BOTTOM (894→956) — the black strip under the
-  // nav. Fix: pin top:0 and set an explicit height of 100lvh (the LARGE viewport ==
-  // the true 956px screen). The fixed box then spans 0–956, overflowing the short
-  // containing block downward into the home-indicator strip (cover mode draws there),
-  // so the nav reaches the physical bottom edge. It isn't clipped by body
-  // overflow:hidden (ancestor overflow never clips fixed boxes). Center via
-  // margin:auto (no transform) so absolute children + sheet overlays still anchor
-  // to the shell; overflow:hidden + the scroll area's overflowX:hidden kill drift.
+  // iOS standalone PWA (viewport-fit=cover) viewport model — CONFIRMED on-device:
+  //   innerHeight == 100svh == 100dvh == 894  → the VISIBLE viewport. Content placed
+  //     below y=894 is NOT shown (b18/b19: nav labels at y≈936/908 were cut off).
+  //   100lvh == screen.height == 956  → the full physical panel.
+  // The shell fills the full 956 (height:100lvh) so its background reaches the physical
+  // bottom edge (no dark gap/strip). Because only the top 894 is visible, the bottom
+  // nav keeps its CONTENT above y=894 via --navpad (= [100lvh − innerHeight] + safe-
+  // bottom + breathing); its background still fills down to the edge. Center via
+  // margin:auto (NOT transform) so fixed children/overlays still anchor to the shell.
   position: 'fixed',
   top: 0,
   left: 0,
@@ -168,8 +166,12 @@ export function VialApp() {
     return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
   }, []);
 
-  // TEMP diagnostic: report this device's real viewport numbers so we can see
-  // which height value is wrong (why the UI overflows the screen).
+  // Measure the device viewport and set --navpad: the bottom-nav padding that keeps
+  // its labels inside the VISIBLE viewport (innerHeight) while the shell's background
+  // still fills the full 100lvh physical screen. navpad = (100lvh − innerHeight) +
+  // safe-bottom + breathing. Re-runs when data loads (deps: dataLoading) and retries
+  // via rAF, because on a cold PWA launch the probes mount AFTER the first paint
+  // (that timing gap is why the earlier readout showed -1/na).
   useEffect(() => {
     const px = (id: string) => {
       const el = document.getElementById(id);
@@ -185,22 +187,27 @@ export function VialApp() {
       const ih = Math.round(window.innerHeight);
       const scr = typeof window.screen !== 'undefined' ? window.screen.height : -1;
       const sab = px('p-sab');
-      const sat = px('p-sat');
-      // env(safe-area-inset-bottom) reads 0 for the nav — it sits in the shell's
-      // region below the small viewport, where iOS zeroes the inset. Drive the nav's
-      // safe padding from the reliably-measured probe (anchored at top:0) via a CSS var.
-      if (sab >= 0) document.documentElement.style.setProperty('--sab', `${sab}px`);
-      if (sat >= 0) document.documentElement.style.setProperty('--sat', `${sat}px`);
-      // sh/nv = rendered top-bottom of the shell + nav. If nv's bottom == scr, the bar
-      // reaches the physical screen edge (the real fix-confirmation signal).
-      setDiag(`ih${ih} lvh${px('p-lvh')} svh${px('p-svh')} sat${sat} sab${sab} scr${scr} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
+      const lvh = px('p-lvh');
+      // How far the 100lvh shell overflows the visible viewport — content below this
+      // fold is off-screen, so push the nav's content up by it (+ home-indicator inset).
+      const overflow = lvh > 0 ? Math.max(0, lvh - ih) : 0;
+      const navpad = overflow + Math.max(sab, 0) + 12;
+      document.documentElement.style.setProperty('--navpad', `${navpad}px`);
+      setDiag(`ih${ih} lvh${lvh} svh${px('p-svh')} sab${sab} scr${scr} np${navpad} sh${rect('vial-shell')} nv${rect('vial-nav')}`);
     };
-    read();
-    const t = setTimeout(read, 600);
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      read();
+      if (++tries < 60 && document.getElementById('vial-nav') === null) raf = requestAnimationFrame(tick);
+    };
+    tick();
+    const t1 = setTimeout(read, 400);
+    const t2 = setTimeout(read, 1200);
     window.addEventListener('resize', read);
     window.visualViewport?.addEventListener('resize', read);
-    return () => { clearTimeout(t); window.removeEventListener('resize', read); window.visualViewport?.removeEventListener('resize', read); };
-  }, []);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); window.removeEventListener('resize', read); window.visualViewport?.removeEventListener('resize', read); };
+  }, [dataLoading]);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
   useEffect(() => {
@@ -412,7 +419,7 @@ export function VialApp() {
       {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
           flex-column shell. Its background fills the home-indicator safe area via
           padding-bottom: env(safe-area-inset-bottom). */}
-      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'calc(var(--sab, 34px) + 14px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      <div id="vial-nav" style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'var(--navpad, 108px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 6px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
