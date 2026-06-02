@@ -51,17 +51,16 @@ const shell: React.CSSProperties = {
   // viewport differ, which left a gap below the nav. position:fixed + inset
   // makes the shell own the full visible viewport, so the bottom bar reaches
   // the bottom edge in both Safari and the installed PWA.
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
+  position: 'relative',
   width: '100%',
   maxWidth: 440,
   // Exact visible height measured in JS (--app-h), with a dvh fallback for the
-  // first paint. Guarantees the shell fills the screen so the nav reaches the bottom.
+  // first paint. position:relative (in the locked body) avoids the iOS
+  // fixed-positioning drift while still filling the screen.
   height: 'var(--app-h, 100dvh)',
   margin: '0 auto',
   overflow: 'hidden',
+  overscrollBehavior: 'none',
   background: 'var(--bg)',
   boxShadow: '0 0 80px rgba(0,0,0,0.35)',
 };
@@ -312,7 +311,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -327,7 +326,7 @@ export function VialApp() {
       {sub && (
         <div
           style={{
-            position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', zIndex: 60,
+            position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', zIndex: 60,
             transform: closing ? 'translateX(100%)' : 'translateX(0)',
             animation: closing ? 'none' : 'slideIn .32s cubic-bezier(.32,.72,0,1)',
             transition: closing ? 'transform .3s cubic-bezier(.32,.72,0,1)' : 'none',
@@ -341,14 +340,14 @@ export function VialApp() {
       {/* bottom nav — docked bar with a solid surface that fills to the screen
           bottom (incl. the home-indicator safe area) so it reads as anchored,
           not floating in a void. */}
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface)', borderTop: '1px solid var(--line-strong)', paddingTop: 6, paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.45)' }}>
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 6, paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />
           <button
             onClick={app.openLog}
             aria-label="Log a dose"
-            style={{ width: 52, height: 52, margin: '0 6px', borderRadius: '50%', border: '3px solid var(--surface)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)', marginTop: -22 }}
+            style={{ width: 52, height: 52, margin: '0 6px', borderRadius: '50%', border: '3px solid var(--surface-2)', background: 'var(--amber)', color: 'var(--bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 6px 18px rgba(215,147,86,0.4)', marginTop: -22 }}
           >
             <Icon.plus />
           </button>

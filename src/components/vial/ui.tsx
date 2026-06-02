@@ -201,14 +201,21 @@ export function Sheet({
           borderTop: '1px solid var(--line-strong)',
           transform: open ? 'translateY(0)' : 'translateY(110%)',
           transition: 'transform .34s cubic-bezier(.32,.72,0,1)',
-          paddingBottom: 'calc(38px + env(safe-area-inset-bottom, 0px))', maxHeight: '92dvh', overflow: 'auto',
+          paddingBottom: 'calc(38px + env(safe-area-inset-bottom, 0px))', maxHeight: '92dvh', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain',
           boxShadow: '0 -20px 50px rgba(0,0,0,0.5)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10 }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 3, background: 'var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 10, paddingBottom: 6 }}>
           <div style={{ width: 38, height: 4, borderRadius: 99, background: 'var(--line-strong)' }} />
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ position: 'absolute', right: 14, top: 8, width: 32, height: 32, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface-2)', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          </button>
         </div>
-        {title && <div style={{ padding: '14px 22px 0', fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--text)' }}>{title}</div>}
+        {title && <div style={{ padding: '6px 22px 0', fontFamily: 'var(--serif)', fontSize: 22, color: 'var(--text)' }}>{title}</div>}
         {children}
       </div>
     </div>
