@@ -119,3 +119,21 @@ input[type="range"]::-moz-range-thumb {
   filter: invert(0.7);
   cursor: pointer;
 }
+
+/* iOS Safari renders native date/time inputs as inline-flex and ignores
+   width:100% (they overflow their container). appearance:none + display:block
+   + box-sizing makes them honor the width; min-width:0 defeats the flexbox
+   automatic-minimum-size. The native picker still opens + value still shows. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}

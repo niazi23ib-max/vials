@@ -12,6 +12,8 @@ type DoseUnit = 'mcg' | 'mg' | 'IU';
 
 const inputStyle: CSSProperties = {
   width: '100%',
+  minWidth: 0, // let native date/time inputs shrink to the container instead of overflowing
+  maxWidth: '100%',
   background: 'var(--surface-2)',
   border: '1px solid var(--line-strong)',
   borderRadius: 12,
@@ -33,7 +35,7 @@ const inputSuffixed: CSSProperties = { ...inputStyle, paddingRight: 44 };
 
 function Fld({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label style={{ display: 'block' }}>
+    <label style={{ display: 'block', minWidth: 0, maxWidth: '100%' }}>
       <div style={{ marginBottom: 7 }}><Label>{label}</Label></div>
       {children}
     </label>

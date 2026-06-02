@@ -54,10 +54,11 @@ const shell: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   maxWidth: 440,
-  // Exact visible height measured in JS (--app-h), with a dvh fallback for the
-  // first paint. position:relative (in the locked body) avoids the iOS
-  // fixed-positioning drift while still filling the screen.
-  height: 'var(--app-h, 100dvh)',
+  // 100vh + viewport-fit=cover spans the FULL screen incl. the home-indicator
+  // area in standalone. (100dvh has a known PWA cold-launch bug; window.innerHeight
+  // excludes the home-indicator area — both left a gap.) The docked nav paints its
+  // own background through the safe area via padding-bottom: env(safe-area-inset-bottom).
+  height: '100vh',
   margin: '0 auto',
   overflow: 'hidden',
   overscrollBehavior: 'none',
@@ -136,18 +137,6 @@ export function VialApp() {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {});
     }
-  }, []);
-
-  // Pin the shell to the exact visible viewport height (iOS-reliable).
-  useEffect(() => {
-    const setH = () => document.documentElement.style.setProperty('--app-h', `${window.innerHeight}px`);
-    setH();
-    window.addEventListener('resize', setH);
-    window.addEventListener('orientationchange', setH);
-    return () => {
-      window.removeEventListener('resize', setH);
-      window.removeEventListener('orientationchange', setH);
-    };
   }, []);
 
   // Supabase fires PASSWORD_RECOVERY when a recovery/invite link is opened.
