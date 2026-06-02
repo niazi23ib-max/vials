@@ -34,7 +34,7 @@ export function ScheduleScreen({ app }: { app: AppApi }) {
   );
 
   return (
-    <div style={{ paddingTop: 56, paddingBottom: 116 }}>
+    <div style={{ paddingTop: 56, paddingBottom: 28 }}>
       <div style={{ padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
         <div style={{ minWidth: 0 }}>
           <Label>Schedule · {weekTotal} doses</Label>

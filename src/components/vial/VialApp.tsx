@@ -20,7 +20,7 @@ import { SetPassword } from './SetPassword';
 
 // Bump on each deploy — shown top-left so we can confirm the installed PWA is
 // actually running the latest build (vs. a stale cached snapshot).
-const BUILD = 'b15';
+const BUILD = 'b16';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -58,11 +58,12 @@ const shell: React.CSSProperties = {
   position: 'relative',
   width: '100%',
   maxWidth: 440,
-  // 100svh = the SMALL viewport — guaranteed never taller than the visible area,
-  // so the UI never overflows/cuts off at the bottom. (100vh/100lvh use the LARGE
-  // viewport, which on iOS is taller than what's visible and pushed the bottom
-  // off-screen.) The fixed nav pins to the visible bottom independently.
+  // 100svh = the visible viewport on this device (confirmed: svh === innerHeight).
+  // Flex column: the scroll area flexes and the nav is an in-flow row pinned at the
+  // bottom — no absolute/fixed positioning, so nothing can overflow or be clipped.
   height: '100svh',
+  display: 'flex',
+  flexDirection: 'column',
   margin: '0 auto',
   overflow: 'hidden',
   overscrollBehavior: 'none',
@@ -346,7 +347,7 @@ export function VialApp() {
         </svg>
       </button>
 
-      <div style={{ position: 'absolute', inset: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', paddingTop: 'env(safe-area-inset-top)' }}>
         {loadError && (
           <div style={{ margin: '56px 20px 0', padding: '12px 14px', background: 'rgba(215,128,110,0.12)', border: '1px solid var(--red)', borderRadius: 14, color: 'var(--red)', fontSize: 13 }}>
             {loadError}
@@ -372,10 +373,10 @@ export function VialApp() {
         </div>
       )}
 
-      {/* bottom nav — docked bar with a solid surface that fills to the screen
-          bottom (incl. the home-indicator safe area) so it reads as anchored,
-          not floating in a void. */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, width: '100%', maxWidth: 440, margin: '0 auto', zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(30px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
+      {/* bottom nav — an in-flow flex row (flexShrink:0) pinned at the bottom of the
+          flex-column shell. Its background fills the home-indicator safe area via
+          padding-bottom: env(safe-area-inset-bottom). */}
+      <div style={{ flexShrink: 0, zIndex: 50, background: 'var(--surface-2)', borderTop: '1px solid var(--line-strong)', paddingTop: 8, paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom, 0px) + 10px))', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }}>
         <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px' }}>
           <NavBtn tab={TABS[0]} active={tab === 'today'} onClick={() => setTab('today')} />
           <NavBtn tab={TABS[1]} active={tab === 'schedule'} onClick={() => setTab('schedule')} />

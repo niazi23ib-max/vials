@@ -266,7 +266,7 @@ function TitrationTab({ app }: { app: AppApi }) {
 export function CalculatorScreen({ app }: { app: AppApi }) {
   const [tab, setTab] = useState<'recon' | 'titration'>('recon');
   return (
-    <div style={{ paddingTop: 56, paddingBottom: 116 }}>
+    <div style={{ paddingTop: 56, paddingBottom: 28 }}>
       <div style={{ padding: '0 20px' }}>
         <Label>Tools</Label>
         <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 400, fontSize: 32, color: 'var(--text)', margin: '8px 0 0' }}>Calculator</h1>
