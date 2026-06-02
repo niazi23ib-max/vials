@@ -46,10 +46,18 @@ function NavBtn({ tab, active, onClick }: { tab: (typeof TABS)[number]; active: 
 }
 
 const shell: React.CSSProperties = {
-  position: 'relative',
+  // Pin to the actual viewport (top→bottom) rather than relying on 100dvh in
+  // normal flow — on iOS the document's layout-viewport height and the dynamic
+  // viewport differ, which left a gap below the nav. position:fixed + inset
+  // makes the shell own the full visible viewport, so the bottom bar reaches
+  // the bottom edge in both Safari and the installed PWA.
+  position: 'fixed',
+  top: 0,
+  bottom: 0,
+  left: 0,
+  right: 0,
   width: '100%',
   maxWidth: 440,
-  height: '100dvh',
   margin: '0 auto',
   overflow: 'hidden',
   background: 'var(--bg)',
