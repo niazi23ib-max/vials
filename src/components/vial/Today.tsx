@@ -34,8 +34,9 @@ function DoseRow({ ev, taken, onToggle, onOpen }: { ev: Ev; taken: boolean; onTo
       </div>
       <button
         onClick={() => onToggle(ev.id)}
+        aria-label={taken ? 'Mark not taken' : 'Mark taken'}
         style={{
-          width: 32, height: 32, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+          width: 36, height: 36, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
           border: taken ? 'none' : '1.5px solid var(--line-strong)',
           background: taken ? 'var(--green)' : 'transparent',
           color: taken ? 'var(--bg)' : 'transparent',

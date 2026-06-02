@@ -163,15 +163,6 @@ export interface DoseLogRow {
   status: 'taken' | 'skipped';
 }
 
-export async function listLogsForDate(dateISO: string): Promise<DoseLogRow[]> {
-  const { data, error } = await createClient()
-    .from('dose_logs')
-    .select('id,substance_id,scheduled_date,status')
-    .eq('scheduled_date', dateISO);
-  if (error) throw error;
-  return data as DoseLogRow[];
-}
-
 /** All of the user's dose logs on or after `sinceISO` (for history, the week view, and stats). */
 export async function listLogs(sinceISO: string): Promise<DoseLogRow[]> {
   const { data, error } = await createClient()

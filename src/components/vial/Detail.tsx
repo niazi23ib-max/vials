@@ -28,7 +28,7 @@ export function DetailScreen({ sub, app, onBack }: { sub: Substance; app: AppApi
 
   return (
     <div style={{ minHeight: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'linear-gradient(var(--bg), rgba(16,13,10,0.85))', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '54px 16px 10px' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'linear-gradient(var(--bg), rgba(16,13,10,0.85))', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'calc(env(safe-area-inset-top, 0px) + 16px) 16px 10px' }}>
         <button onClick={onBack} style={{ width: 38, height: 38, borderRadius: '50%', border: '1px solid var(--line-strong)', background: 'var(--surface)', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Icon.back /></button>
         <Label>{s.category}</Label>
         <button

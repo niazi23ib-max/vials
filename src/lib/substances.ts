@@ -165,7 +165,8 @@ export function daysLeft(s: Substance): number {
 
 export function daysUntil(dateStr: string, now = new Date()): number {
   const then = new Date(dateStr + 'T00:00:00');
-  return Math.round((then.getTime() - now.getTime()) / 86_400_000);
+  const today = new Date(isoDate(now) + 'T00:00:00'); // floor to local midnight so the count is stable through the day
+  return Math.round((then.getTime() - today.getTime()) / 86_400_000);
 }
 
 export type StockStatus = 'critical' | 'low' | 'ok';

@@ -265,7 +265,7 @@ export function VialApp() {
       {sub && (
         <div
           style={{
-            position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', zIndex: 40,
+            position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'none', WebkitOverflowScrolling: 'touch', background: 'var(--bg)', zIndex: 60,
             transform: closing ? 'translateX(100%)' : 'translateX(0)',
             animation: closing ? 'none' : 'slideIn .32s cubic-bezier(.32,.72,0,1)',
             transition: closing ? 'transform .3s cubic-bezier(.32,.72,0,1)' : 'none',

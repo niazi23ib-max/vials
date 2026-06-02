@@ -86,12 +86,19 @@ export async function GET(req: Request) {
   for (const s of substances) {
     const u = byUser.get(s.user_id);
     if (!u) continue;
-    const { weekday, date, minutes } = localParts(now, u.tz);
-    if (!(s.days ?? []).includes(weekday)) continue;
     const dm = doseMinutes(s.time);
     if (dm === null) continue;
-    if (minutes < dm || minutes > dm + WINDOW_MIN) continue; // only at/just-after dose time
-    due.push({ user_id: s.user_id, sub: s, date });
+    const days = s.days ?? [];
+    const t = localParts(now, u.tz);
+    if (days.includes(t.weekday) && t.minutes >= dm && t.minutes <= dm + WINDOW_MIN) {
+      due.push({ user_id: s.user_id, sub: s, date: t.date }); // at/just-after dose time today
+    } else if (t.minutes <= WINDOW_MIN) {
+      // Just after local midnight: catch a late dose carried over from yesterday.
+      const y = localParts(new Date(now.getTime() - 86_400_000), u.tz);
+      if (days.includes(y.weekday) && t.minutes + 1440 >= dm && t.minutes + 1440 <= dm + WINDOW_MIN) {
+        due.push({ user_id: s.user_id, sub: s, date: y.date });
+      }
+    }
   }
   if (!due.length) return NextResponse.json({ ok: true, due: 0, sent: 0 });
 

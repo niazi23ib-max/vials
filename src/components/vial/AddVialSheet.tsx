@@ -27,6 +27,10 @@ const adorn: CSSProperties = {
   fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-faint)', pointerEvents: 'none',
 };
 
+// Inputs with a right-side unit suffix need reserved padding so long values
+// don't slide under the suffix glyph (mg / mL / caps).
+const inputSuffixed: CSSProperties = { ...inputStyle, paddingRight: 44 };
+
 function Fld({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label style={{ display: 'block' }}>
@@ -153,6 +157,7 @@ export function AddVialSheet({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return setError('Give it a name.');
+    if (days.length === 0) return setError('Pick at least one dosing day.');
     if (form === 'oral') {
       if (!(cnt > 0)) return setError('Enter how many capsules/tablets are in the container.');
       if (!(doseRaw > 0)) return setError('Enter the strength per capsule.');
@@ -246,7 +251,7 @@ export function AddVialSheet({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Fld label="In container">
                   <div style={{ position: 'relative' }}>
-                    <input className="vlf" style={inputStyle} type="number" inputMode="numeric" step="1" min="0" value={count} onChange={(e) => setCount(e.target.value)} placeholder="60" />
+                    <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="0" value={count} onChange={(e) => setCount(e.target.value)} placeholder="60" />
                     <span style={adorn}>caps</span>
                   </div>
                 </Fld>
@@ -254,7 +259,7 @@ export function AddVialSheet({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Fld label="Per dose">
                   <div style={{ position: 'relative' }}>
-                    <input className="vlf" style={inputStyle} type="number" inputMode="numeric" step="1" min="1" value={capsPerDose} onChange={(e) => setCapsPerDose(e.target.value)} placeholder="1" />
+                    <input className="vlf" style={inputSuffixed} type="number" inputMode="numeric" step="1" min="1" value={capsPerDose} onChange={(e) => setCapsPerDose(e.target.value)} placeholder="1" />
                     <span style={adorn}>caps</span>
                   </div>
                 </Fld>
@@ -277,7 +282,7 @@ export function AddVialSheet({
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Fld label={form === 'inject' ? 'Amount in vial' : 'Amount in container'}>
                   <div style={{ position: 'relative' }}>
-                    <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={vialMg} onChange={(e) => setVialMg(e.target.value)} placeholder="5" />
+                    <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={vialMg} onChange={(e) => setVialMg(e.target.value)} placeholder="5" />
                     <span style={adorn}>mg</span>
                   </div>
                 </Fld>
@@ -286,7 +291,7 @@ export function AddVialSheet({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Fld label="BAC water">
                     <div style={{ position: 'relative' }}>
-                      <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
+                      <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
                       <span style={adorn}>mL</span>
                     </div>
                   </Fld>
@@ -308,7 +313,7 @@ export function AddVialSheet({
         {isEdit && (
           <Fld label="Amount left">
             <div style={{ position: 'relative' }}>
-              <input className="vlf" style={inputStyle} type="number" inputMode="decimal" step="any" min="0" value={amountLeft} onChange={(e) => setAmountLeft(e.target.value)} placeholder="0" />
+              <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={amountLeft} onChange={(e) => setAmountLeft(e.target.value)} placeholder="0" />
               <span style={adorn}>{form === 'oral' ? 'caps' : 'mg'}</span>
             </div>
             <div style={{ marginTop: 7, fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)' }}>
