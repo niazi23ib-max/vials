@@ -66,17 +66,19 @@ export function Syringe({ units, cap }: { units: number; cap?: number }) {
         <div style={{ width: 16, height: 12, background: 'var(--line-strong)', borderRadius: '3px 0 0 3px' }} />
         <div style={{ width: 4, height: 22, background: 'var(--line-strong)' }} />
         <div style={{ position: 'relative', flex: 1, height: 34, background: 'rgba(255,255,255,0.025)', border: '1.5px solid var(--line-strong)', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: pct + '%', background: 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))', transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
+          {/* Liquid fills from the needle (right) side — it's drawn in through the needle.
+              Scale reads 0 at the needle, increasing toward the plunger (left). */}
+          <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: pct + '%', background: 'linear-gradient(180deg, var(--amber), oklch(0.6 0.12 55))', transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
           {labels.slice(1, -1).map((v) => (
-            <div key={v} style={{ position: 'absolute', left: (v / capped) * 100 + '%', top: 6, bottom: 0, width: 1, background: 'var(--line)' }} />
+            <div key={v} style={{ position: 'absolute', right: (v / capped) * 100 + '%', top: 6, bottom: 0, width: 1, background: 'var(--line)' }} />
           ))}
-          <div style={{ position: 'absolute', left: `calc(${pct}% - 1px)`, top: -2, bottom: -2, width: 2, background: 'var(--text)' }} />
+          <div style={{ position: 'absolute', right: `calc(${pct}% - 1px)`, top: -2, bottom: -2, width: 2, background: 'var(--text)' }} />
         </div>
         <div style={{ width: 5, height: 8, background: 'var(--line-strong)' }} />
         <div style={{ width: 22, height: 1.5, background: 'var(--line-strong)' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5, padding: '0 28px 0 22px' }}>
-        {labels.map((v) => <span key={v} style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-faint)' }}>{v}</span>)}
+        {[...labels].reverse().map((v) => <span key={v} style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text-faint)' }}>{v}</span>)}
       </div>
       <div style={{ fontFamily: 'var(--mono)', fontSize: 9.5, color: over ? 'var(--amber)' : 'var(--text-faint)', marginTop: 5, lineHeight: 1.4 }}>
         {over ? 'Exceeds the syringe — split the draw or add more BAC water.' : `U-100 · ${capped}-unit syringe`}
