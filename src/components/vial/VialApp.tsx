@@ -135,6 +135,19 @@ export function VialApp() {
     setDataLoading(true);
     setLoadError(null);
     loadData()
+      .then(() => {
+        if (cancelled) return;
+        // Deep link from a push-notification tap: /?dose=<subId>|<date>|<slot>.
+        // Open the log sheet for that substance, then strip the param.
+        const sp = new URLSearchParams(window.location.search);
+        const dose = sp.get('dose');
+        if (!dose) return;
+        const subId = dose.split('|')[0];
+        if (subId) setSheet({ open: true, subId });
+        sp.delete('dose');
+        const qs = sp.toString();
+        window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+      })
       .catch((e) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : 'Failed to load your data.');
       })
