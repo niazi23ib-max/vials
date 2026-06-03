@@ -6,17 +6,34 @@ import { Label, Chip, Syringe } from './ui';
 import type { AppApi } from './types';
 
 function Stepper({ label, value, unit, step, min, max, fmt, onChange }: { label: string; value: number; unit: string; step: number; min: number; max: number; fmt?: (v: number) => string; onChange: (v: number) => void }) {
+  // The value is a typeable input (tap + type any number, clamped to [min,max]) with
+  // +/- for fine adjustment. While focused we show the raw text so typing isn't fought
+  // by clamping; on blur it snaps to the formatted, clamped value.
+  const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
+  const shown = fmt ? fmt(value) : String(value);
+  const commit = (raw: string) => {
+    const n = parseFloat(raw);
+    if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, +n.toFixed(2))));
+  };
   const btn = (txt: string, fn: () => void) => (
-    <button onClick={fn} style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line-strong)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>{txt}</button>
+    <button type="button" onClick={fn} style={{ width: 34, height: 34, borderRadius: 10, border: '1px solid var(--line-strong)', background: 'rgba(255,255,255,0.03)', color: 'var(--text)', fontFamily: 'var(--mono)', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }}>{txt}</button>
   );
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid var(--line)' }}>
       <Label color="var(--text-dim)">{label}</Label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {btn('−', () => onChange(Math.max(min, +(value - step).toFixed(2))))}
-        <div style={{ minWidth: 76, textAlign: 'center' }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 19, color: 'var(--text)' }}>{fmt ? fmt(value) : value}</span>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)', marginLeft: 4 }}>{unit}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 86, justifyContent: 'center' }}>
+          <input
+            inputMode="decimal"
+            value={focused ? text : shown}
+            onFocus={(e) => { setFocused(true); setText(shown); e.currentTarget.select(); }}
+            onChange={(e) => { setText(e.target.value); commit(e.target.value); }}
+            onBlur={(e) => { setFocused(false); commit(e.target.value); }}
+            style={{ width: 58, textAlign: 'right', background: 'transparent', border: 'none', borderBottom: '1px solid var(--line-strong)', fontFamily: 'var(--mono)', fontSize: 19, color: 'var(--text)', outline: 'none', padding: '0 0 1px' }}
+          />
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-faint)' }}>{unit}</span>
         </div>
         {btn('+', () => onChange(Math.min(max, +(value + step).toFixed(2))))}
       </div>
@@ -85,7 +102,7 @@ function ReconTab({ substances }: { substances: Substance[] }) {
       <div style={{ padding: '22px 20px 0' }}>
         <Label>Vial setup</Label>
         <div style={{ marginTop: 6 }}>
-          <Stepper label="Peptide in vial" value={mg} unit="mg" step={1} min={1} max={50} onChange={setMg} />
+          <Stepper label="Peptide in vial" value={mg} unit="mg" step={1} min={1} max={1000} onChange={setMg} />
           <Stepper label="BAC water added" value={bac} unit="mL" step={0.5} min={0.5} max={5} fmt={(v) => v.toFixed(1)} onChange={setBac} />
         </div>
         <div style={{ marginTop: 18 }}>
