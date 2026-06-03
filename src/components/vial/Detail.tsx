@@ -4,7 +4,7 @@ import { memo, useMemo } from 'react';
 import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabelOn, recon, ok, DAY_ORDER,
   substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, effectiveDoseMcg, isoDate,
-  scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite,
+  scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite, dayDoses,
   reconStatus, reconDaysLeft, daysSinceRecon, reconBUDDate, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon, Syringe } from './ui';
@@ -148,7 +148,7 @@ export const DetailScreen = memo(function DetailScreen({ sub, app, onBack }: { s
             <div style={{ marginTop: 10, fontFamily: 'var(--serif)', fontSize: 18, color: 'var(--text)' }}>{scheduleLabel(s)}</div>
           )}
           <div style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)', marginTop: 10, lineHeight: 1.6 }}>
-            {s.time} {s.period} · {s.route}
+            {dayDoses(s).map((d) => `${d.time} ${d.period}`).join(' · ')} · {s.route}
             {course && <> · <span style={{ color: 'var(--amber)' }}>{course.ended ? 'Course ended' : `Week ${course.week}${course.total ? ` of ${course.total}` : ''}`}</span></>}
             {form === 'inject' && <> · next site {nextSite(app.lastSiteFor(s.id))}</>}
           </div>
