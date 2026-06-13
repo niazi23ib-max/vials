@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   recon, suggestReconOptions, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
   addDaysISO, daysUntil, RECON_DEFAULT_BUD,
-  type Substance, type ScheduleKind,
+  type Substance, type ScheduleKind, type BlendComponent,
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
 import type { AppApi } from './types';
@@ -174,6 +174,7 @@ export function AddVialSheet({
   const [route, setRoute] = useState('Subcutaneous');
   const [vialMg, setVialMg] = useState('');
   const [bacMl, setBacMl] = useState('');
+  const [components, setComponents] = useState<{ name: string; mg: string }[]>([]); // blend actives (mg as text while editing)
   const [count, setCount] = useState(''); // capsules in container (oral)
   const [capsPerDose, setCapsPerDose] = useState('1'); // capsules per dose (oral)
   const [doseValue, setDoseValue] = useState('');
@@ -212,6 +213,7 @@ export function AddVialSheet({
       setRoute(editing.route);
       setVialMg(editing.vialMg ? String(editing.vialMg) : '');
       setBacMl(editing.bacMl ? String(editing.bacMl) : '');
+      setComponents(editing.components?.length ? editing.components.map((c) => ({ name: c.name, mg: String(c.mg) })) : []);
       setCount(editing.count ? String(editing.count) : '');
       setCapsPerDose(String(editing.capsPerDose || 1));
       setDoseUnit(editing.unit);
@@ -246,6 +248,7 @@ export function AddVialSheet({
       setRoute('Subcutaneous');
       setVialMg('');
       setBacMl('');
+      setComponents([]);
       setCount('');
       setCapsPerDose('1');
       setDoseValue('');
@@ -281,6 +284,12 @@ export function AddVialSheet({
   function toggleDay(d: string) {
     setDays((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
   }
+  // Blend component editor.
+  const updateComp = (i: number, patch: Partial<{ name: string; mg: string }>) =>
+    setComponents((prev) => prev.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const addComp = () => setComponents((prev) => [...prev, { name: '', mg: '' }]);
+  const removeComp = (i: number) => setComponents((prev) => prev.filter((_, j) => j !== i));
+  const makeBlend = () => setComponents([{ name: name.trim(), mg: vialMg || '5' }, { name: '', mg: '5' }]);
 
   // Prefill the whole form from a library preset (all values stay editable).
   function applyPreset(p: LibraryItem) {
@@ -294,11 +303,13 @@ export function AddVialSheet({
       setCapsPerDose('1');
       setVialMg('');
       setBacMl('');
+      setComponents([]);
     } else {
       setVialMg(p.vialMg ? String(p.vialMg) : '');
       setBacMl(f === 'inject' ? String(p.bacMl ?? 2) : '');
       setCount('');
       setCapsPerDose('1'); // reset so it can't leak from a prior oral pick
+      setComponents(p.components?.length ? p.components.map((c) => ({ name: c.name, mg: String(c.mg) })) : []);
     }
     setDoseValue(String(p.dose));
     setDoseUnit(p.doseUnit);
@@ -312,7 +323,9 @@ export function AddVialSheet({
     setError(null);
   }
 
-  const mg = Number(vialMg);
+  const hasComp = components.length > 0;
+  const compMg = components.reduce((a, c) => a + (Number(c.mg) || 0), 0);
+  const mg = hasComp ? compMg : Number(vialMg); // a blend's vial mg is the sum of its components
   const bac = Number(bacMl);
   const cnt = Number(count);
   const perDose = Number(capsPerDose) || 1;
@@ -389,6 +402,12 @@ export function AddVialSheet({
       created: editing ? editing.created : '', // server stamps created_at; refreshed on reload
     };
 
+    // A blend needs ≥2 actives with mg; otherwise it's just a single substance.
+    const cleanComponents: BlendComponent[] = components
+      .map((c) => ({ name: c.name.trim(), mg: Math.max(0, Number(c.mg) || 0) }))
+      .filter((c) => c.mg > 0);
+    const blendComponents = cleanComponents.length >= 2 ? cleanComponents : null;
+
     let fields: Omit<Substance, 'id'>;
     if (form === 'oral') {
       fields = {
@@ -399,6 +418,7 @@ export function AddVialSheet({
         doseMcg: noStrength ? 0 : doseRaw, // strength per cap, in `unit` (0 = no single strength)
         unit: doseUnit,
         remaining: editing ? leftRemaining : cnt,
+        components: null,
       };
     } else {
       fields = {
@@ -409,6 +429,7 @@ export function AddVialSheet({
         doseMcg: doseMcgInject,
         unit: (doseUnit === 'IU' ? 'mcg' : doseUnit) as 'mcg' | 'mg',
         remaining: editing ? leftRemaining : mg * 1000,
+        components: blendComponents,
       };
     }
 
@@ -489,17 +510,29 @@ export function AddVialSheet({
           </>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Fld label={form === 'inject' ? 'Amount in vial' : 'Amount in container'}>
-                  <div style={{ position: 'relative' }}>
-                    <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={vialMg} onChange={(e) => setVialMg(e.target.value)} placeholder="5" />
-                    <span style={adorn}>mg</span>
+            {hasComp ? (
+              <>
+                <Fld label="Blend components">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {components.map((c, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input className="vlf" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="text" value={c.name} onChange={(e) => updateComp(i, { name: e.target.value })} placeholder={`Active ${i + 1}`} />
+                        <div style={{ position: 'relative', width: 92, flexShrink: 0 }}>
+                          <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={c.mg} onChange={(e) => updateComp(i, { mg: e.target.value })} placeholder="5" />
+                          <span style={adorn}>mg</span>
+                        </div>
+                        <button type="button" onClick={() => removeComp(i)} aria-label="Remove component"
+                          style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface-2)', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 17, lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 9 }}>
+                    <button type="button" onClick={addComp}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 999, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}>＋ add active</button>
+                    <span style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-dim)' }}>Vial total {compMg || 0} mg</span>
                   </div>
                 </Fld>
-              </div>
-              {form === 'inject' && (
-                <div style={{ flex: 1, minWidth: 0 }}>
+                {form === 'inject' && (
                   <Fld label="BAC water">
                     <div style={{ position: 'relative' }}>
                       <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
@@ -512,9 +545,40 @@ export function AddVialSheet({
                       </button>
                     )}
                   </Fld>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Fld label={form === 'inject' ? 'Amount in vial' : 'Amount in container'}>
+                      <div style={{ position: 'relative' }}>
+                        <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={vialMg} onChange={(e) => setVialMg(e.target.value)} placeholder="5" />
+                        <span style={adorn}>mg</span>
+                      </div>
+                    </Fld>
+                  </div>
+                  {form === 'inject' && (
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <Fld label="BAC water">
+                        <div style={{ position: 'relative' }}>
+                          <input className="vlf" style={inputSuffixed} type="number" inputMode="decimal" step="any" min="0" value={bacMl} onChange={(e) => setBacMl(e.target.value)} placeholder="2" />
+                          <span style={adorn}>mL</span>
+                        </div>
+                        {bacSuggestion && String(bacSuggestion.bacMl) !== bacMl && (
+                          <button type="button" onClick={() => setBacMl(String(bacSuggestion.bacMl))}
+                            style={{ marginTop: 7, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, border: '1px solid var(--amber)', background: 'var(--amber-soft)', color: 'var(--amber)', fontFamily: 'var(--mono)', fontSize: 10.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            ✦ {bacSuggestion.bacMl} mL → {bacSuggestion.round ? bacSuggestion.units.toFixed(0) : bacSuggestion.units.toFixed(1)}u
+                          </button>
+                        )}
+                      </Fld>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+                <button type="button" onClick={makeBlend}
+                  style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 999, border: '1px dashed var(--line)', background: 'transparent', color: 'var(--text-dim)', fontFamily: 'var(--mono)', fontSize: 11, cursor: 'pointer' }}>＋ Make this a blend</button>
+              </>
+            )}
             <Fld label="Dose per administration">
               <div style={{ display: 'flex', gap: 10 }}>
                 <input className="vlf" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="number" inputMode="decimal" step="any" min="0" value={doseValue} onChange={(e) => setDoseValue(e.target.value)} placeholder="250" />

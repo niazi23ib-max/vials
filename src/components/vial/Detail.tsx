@@ -5,7 +5,7 @@ import {
   fillPct, daysLeft, dosesLeft, stockStatus, expiryStatus, fmtExpiry, fmtMoney, doseLabelOn, recon, ok, DAY_ORDER,
   substanceForm, dosesPerContainer, containerLabel, fullAmount, doseHistory, effectiveDoseMcg, isoDate,
   scheduleLabel, courseInfo, hasTitrationSchedule, logKey, nextSite, dayDoses,
-  reconStatus, reconDaysLeft, daysSinceRecon, reconBUDDate, type Substance,
+  reconStatus, reconDaysLeft, daysSinceRecon, reconBUDDate, isBlend, blendComponentDoses, type Substance,
 } from '@/lib/substances';
 import { VialFill, Label, Chip, Icon, Syringe } from './ui';
 import type { AppApi } from './types';
@@ -125,6 +125,23 @@ export const DetailScreen = memo(function DetailScreen({ sub, app, onBack }: { s
           <KV label="Expires" value={fmtExpiry(s.expiry)} tone={expiryStatus(s) === 'soon' ? 'var(--amber)' : 'var(--text)'} />
           <KV label="Cost / dose" value={`$${costPerDose.toFixed(2)}`} />
         </div>
+
+        {isBlend(s) && (
+          <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }}>
+            <Label color="var(--text-dim)">Blend · each dose delivers</Label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              {blendComponentDoses(s, todayISO).map((c, i) => {
+                const lbl = c.mcg >= 1000 ? `${+(c.mcg / 1000).toFixed(2)} mg` : `${Math.round(c.mcg)} mcg`;
+                return (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: 'var(--mono)', fontSize: 12.5 }}>
+                    <span style={{ color: 'var(--text-dim)' }}>{c.name || `Active ${i + 1}`}</span>
+                    <span style={{ color: 'var(--text)' }}>{lbl}<span style={{ color: 'var(--text-faint)' }}> · {c.mg} mg/vial</span></span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {r && (
           <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16 }}>

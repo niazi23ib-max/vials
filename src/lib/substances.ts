@@ -42,6 +42,12 @@ export function formOf(route: string): Form {
   return 'dose';
 }
 
+/** One active in a blend (e.g. BPC-157 5 mg). The vial's vialMg is the sum. */
+export interface BlendComponent {
+  name: string;
+  mg: number;
+}
+
 export interface Substance {
   id: string;
   name: string;
@@ -93,6 +99,9 @@ export interface Substance {
   /** whether dose-reminder pushes fire for this substance. */
   remindersEnabled: boolean;
   titration: TitrationStep[] | null;
+  /** inject/dose blends: the actives + their mg in the vial. vialMg equals the sum.
+   *  null / fewer than 2 entries → a single-active substance. */
+  components?: BlendComponent[] | null;
   /** ISO date the vial was added — the floor for adherence/history (no "missed" before this). */
   created: string;
 }
@@ -310,6 +319,24 @@ export function doseLabelOn(s: Substance, iso: string): string {
 /** Decrement for a dose logged on a specific date (titration-aware for inject/dose). */
 export function doseDecrementOn(s: Substance, iso: string): number {
   return formOf(s.route) === 'oral' ? s.capsPerDose || 1 : effectiveDoseMcg(s, iso);
+}
+
+// ── Blends (multi-active vials) ──────────────────────────────────
+/** True when this vial holds ≥2 actives (a blend). */
+export function isBlend(s: Substance): boolean {
+  return !!s.components && s.components.length >= 2;
+}
+/** Combined mg of a blend's components. */
+export function blendTotalMg(s: Substance): number {
+  return (s.components ?? []).reduce((a, c) => a + (Number(c.mg) || 0), 0);
+}
+/** Per-component dose on a date — splits the combined dose by each active's mg share. */
+export function blendComponentDoses(s: Substance, iso: string): { name: string; mg: number; mcg: number }[] {
+  const comps = s.components ?? [];
+  const total = comps.reduce((a, c) => a + (Number(c.mg) || 0), 0);
+  if (!comps.length || total <= 0) return [];
+  const dose = effectiveDoseMcg(s, iso);
+  return comps.map((c) => ({ name: c.name, mg: c.mg, mcg: (c.mg / total) * dose }));
 }
 
 export function daysUntil(dateStr: string, now = new Date()): number {

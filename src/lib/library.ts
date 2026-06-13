@@ -47,6 +47,8 @@ export interface LibraryItem {
   kind: LibraryKind;
   /** optional finer subhead within a kind, e.g. 'Fat-soluble', 'Growth hormone'. */
   group?: string;
+  /** blends only: the actives + their mg. vialMg should equal the sum. */
+  components?: { name: string; mg: number }[];
 }
 
 export const LIBRARY_KINDS: LibraryKind[] = ['Peptides', 'Blends', 'Vitamins & minerals', 'Supplements', 'Medications'];
@@ -147,27 +149,37 @@ export const LIBRARY: LibraryItem[] = [
     blurb: 'Delta sleep-inducing peptide; dosed before bed.', kind: 'Peptides', group: 'Other' },
 
   // ══════════════ BLENDS (peptide combos) ══════════════
-  // One vial holds two actives in a fixed ratio. vialMg = the COMBINED mg, and the
-  // dose is the combined per-injection amount — so a single draw delivers both in
-  // proportion. Ratios shown are typical; edit mg / dose to match your exact vial.
-  { name: 'BPC-157 / TB-500', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 500, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: DAILY },
+  // One vial holds 2–3 actives in a fixed ratio. `components` lists each active +
+  // its mg; vialMg = the sum, and the dose is the combined per-injection amount —
+  // so a single draw delivers all of them in proportion. Edit the component mg
+  // (the ratio) and dose to match your exact vial.
+  { name: 'BPC-157 / TB-500', aka: 'Wolverine blend', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 500, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, components: [{ name: 'BPC-157', mg: 5 }, { name: 'TB-500', mg: 5 }],
     blurb: 'Recovery “Wolverine” blend — BPC-157 + TB-500 for tissue, tendon, gut & joint repair. One draw delivers both.', kind: 'Blends', group: 'Healing & recovery' },
-  { name: 'CJC-1295 / Ipamorelin', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: DAILY }, time: '22:00',
+  { name: 'CJC-1295 / Ipamorelin', aka: 'no-DAC', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, time: '22:00', components: [{ name: 'CJC-1295 (no DAC)', mg: 5 }, { name: 'Ipamorelin', mg: 5 }],
     blurb: 'The classic GH blend — short-acting GHRH + a selective secretagogue. Best on an empty stomach / before bed.', kind: 'Blends', group: 'Growth hormone' },
-  { name: 'CJC-1295 DAC / Ipamorelin', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: MON_THU },
+  { name: 'CJC-1295 DAC / Ipamorelin', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: MON_THU }, components: [{ name: 'CJC-1295 DAC', mg: 5 }, { name: 'Ipamorelin', mg: 5 }],
     blurb: 'Long-acting (DAC) GH blend — sustained GH release means fewer injections per week.', kind: 'Blends', group: 'Growth hormone' },
-  { name: 'GHRP-2 / CJC-1295', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: DAILY },
+  { name: 'GHRP-2 / CJC-1295', aka: 'no-DAC', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, components: [{ name: 'GHRP-2', mg: 5 }, { name: 'CJC-1295 (no DAC)', mg: 5 }],
     blurb: 'GH blend — a potent releaser (GHRP-2) paired with a GHRH for a stronger pulse.', kind: 'Blends', group: 'Growth hormone' },
-  { name: 'GHRP-6 / CJC-1295', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: DAILY },
+  { name: 'GHRP-6 / CJC-1295', aka: 'no-DAC', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, components: [{ name: 'GHRP-6', mg: 5 }, { name: 'CJC-1295 (no DAC)', mg: 5 }],
     blurb: 'GH blend with marked appetite stimulation — GHRP-6 + a GHRH.', kind: 'Blends', group: 'Growth hormone' },
-  { name: 'Sermorelin / Ipamorelin', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
-    schedule: { kind: 'weekly', days: DAILY }, time: '22:00',
+  { name: 'Sermorelin / Ipamorelin', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, time: '22:00', components: [{ name: 'Sermorelin', mg: 5 }, { name: 'Ipamorelin', mg: 5 }],
     blurb: 'Gentle night-time GH blend — GHRH + selective secretagogue; supports sleep.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'BPC-157 / TB-500 / GHK-Cu', aka: 'recovery stack', category: 'Peptide', route: 'Subcutaneous', vialMg: 15, bacMl: 3, dose: 750, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, components: [{ name: 'BPC-157', mg: 5 }, { name: 'TB-500', mg: 5 }, { name: 'GHK-Cu', mg: 5 }],
+    blurb: 'Three-part recovery stack — adds GHK-Cu for skin, collagen & connective tissue.', kind: 'Blends', group: 'Healing & recovery' },
+  { name: 'Tesamorelin / Ipamorelin', category: 'Peptide', route: 'Subcutaneous', vialMg: 15, bacMl: 3, dose: 1, doseUnit: 'mg',
+    schedule: { kind: 'weekly', days: DAILY }, time: '22:00', components: [{ name: 'Tesamorelin', mg: 10 }, { name: 'Ipamorelin', mg: 5 }],
+    blurb: 'Visceral-fat-focused GH blend — GHRH analog (tesamorelin) + a selective secretagogue.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'Semax / Selank', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 600, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, components: [{ name: 'Semax', mg: 5 }, { name: 'Selank', mg: 5 }],
+    blurb: 'Nootropic + calm blend — Semax focus with Selank’s anxiolytic effect. (Often run intranasally.)', kind: 'Blends', group: 'Other' },
 
   // ══════════════ VITAMINS & MINERALS ══════════════
   { name: 'Vitamin D3', aka: 'Cholecalciferol', category: 'Vitamin', route: 'Oral', vialMg: 0, count: 120, dose: 5000, doseUnit: 'IU',

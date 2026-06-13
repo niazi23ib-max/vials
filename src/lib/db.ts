@@ -3,7 +3,7 @@
 // Postgres `numeric` can come back as a string, so all numbers are coerced.
 
 import { createClient } from '@/lib/supabase/client';
-import type { Substance, TitrationStep } from '@/lib/substances';
+import type { BlendComponent, Substance, TitrationStep } from '@/lib/substances';
 import type { BodyMetric } from '@/lib/metrics';
 
 interface SubRow {
@@ -39,6 +39,7 @@ interface SubRow {
   bud_days: number | string | null;
   reminders_enabled: boolean | null;
   titration: TitrationStep[] | null;
+  components: BlendComponent[] | null;
   created_at: string;
 }
 
@@ -76,6 +77,7 @@ function rowToSubstance(r: SubRow): Substance {
     budDays: Number(r.bud_days) || 0,
     remindersEnabled: r.reminders_enabled !== false, // default true (legacy/null)
     titration: r.titration ?? null,
+    components: r.components && r.components.length ? r.components : null,
     created: r.created_at ? r.created_at.slice(0, 10) : '',
   };
 }
@@ -132,6 +134,7 @@ function subToRow(s: Substance) {
     bud_days: s.budDays > 0 ? s.budDays : null,
     reminders_enabled: s.remindersEnabled,
     titration: s.titration,
+    components: s.components && s.components.length ? s.components : null,
   };
 }
 
