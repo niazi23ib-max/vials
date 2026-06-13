@@ -15,7 +15,7 @@ export interface SchedulePreset {
 }
 
 /** Top-level filter buckets for the picker chips. */
-export type LibraryKind = 'Peptides' | 'Vitamins & minerals' | 'Supplements' | 'Medications';
+export type LibraryKind = 'Peptides' | 'Blends' | 'Vitamins & minerals' | 'Supplements' | 'Medications';
 
 export interface LibraryItem {
   name: string;
@@ -49,7 +49,7 @@ export interface LibraryItem {
   group?: string;
 }
 
-export const LIBRARY_KINDS: LibraryKind[] = ['Peptides', 'Vitamins & minerals', 'Supplements', 'Medications'];
+export const LIBRARY_KINDS: LibraryKind[] = ['Peptides', 'Blends', 'Vitamins & minerals', 'Supplements', 'Medications'];
 
 const DAILY = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MON_THU = ['Mon', 'Thu'];
@@ -145,6 +145,29 @@ export const LIBRARY: LibraryItem[] = [
   { name: 'DSIP', category: 'Peptide', route: 'Subcutaneous', vialMg: 5, bacMl: 2, dose: 250, doseUnit: 'mcg',
     schedule: { kind: 'weekly', days: DAILY }, time: '22:00', halfLife: '~hours',
     blurb: 'Delta sleep-inducing peptide; dosed before bed.', kind: 'Peptides', group: 'Other' },
+
+  // ══════════════ BLENDS (peptide combos) ══════════════
+  // One vial holds two actives in a fixed ratio. vialMg = the COMBINED mg, and the
+  // dose is the combined per-injection amount — so a single draw delivers both in
+  // proportion. Ratios shown are typical; edit mg / dose to match your exact vial.
+  { name: 'BPC-157 / TB-500', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 500, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY },
+    blurb: 'Recovery “Wolverine” blend — BPC-157 + TB-500 for tissue, tendon, gut & joint repair. One draw delivers both.', kind: 'Blends', group: 'Healing & recovery' },
+  { name: 'CJC-1295 / Ipamorelin', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, time: '22:00',
+    blurb: 'The classic GH blend — short-acting GHRH + a selective secretagogue. Best on an empty stomach / before bed.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'CJC-1295 DAC / Ipamorelin', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: MON_THU },
+    blurb: 'Long-acting (DAC) GH blend — sustained GH release means fewer injections per week.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'GHRP-2 / CJC-1295', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY },
+    blurb: 'GH blend — a potent releaser (GHRP-2) paired with a GHRH for a stronger pulse.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'GHRP-6 / CJC-1295', aka: 'no-DAC · ≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 200, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY },
+    blurb: 'GH blend with marked appetite stimulation — GHRP-6 + a GHRH.', kind: 'Blends', group: 'Growth hormone' },
+  { name: 'Sermorelin / Ipamorelin', aka: '≈ 5 mg + 5 mg', category: 'Peptide', route: 'Subcutaneous', vialMg: 10, bacMl: 2, dose: 300, doseUnit: 'mcg',
+    schedule: { kind: 'weekly', days: DAILY }, time: '22:00',
+    blurb: 'Gentle night-time GH blend — GHRH + selective secretagogue; supports sleep.', kind: 'Blends', group: 'Growth hormone' },
 
   // ══════════════ VITAMINS & MINERALS ══════════════
   { name: 'Vitamin D3', aka: 'Cholecalciferol', category: 'Vitamin', route: 'Oral', vialMg: 0, count: 120, dose: 5000, doseUnit: 'IU',
