@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type CSSProperties, type ReactNode, type SVGProps } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode, type SVGProps } from 'react';
 import { ok } from '@/lib/substances';
 
 /* ── Vial fill indicator (the brand motif) ───────────────────── */
@@ -226,6 +226,28 @@ export function Sheet({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // Track the on-screen keyboard via the VisualViewport API so the sheet (and its
+  // bottom action button) lifts above it instead of being covered — the fixed app
+  // shell doesn't resize when iOS shows the keyboard.
+  const [kb, setKb] = useState({ inset: 0, vh: 0 });
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!open || !vv) return;
+    const update = () => {
+      const overlap = window.innerHeight - vv.height - vv.offsetTop;
+      setKb(overlap > 80 ? { inset: Math.round(overlap), vh: Math.round(vv.height) } : { inset: 0, vh: 0 });
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [open]);
+  // Gate on `open` so a closed sheet always sits at the normal bottom, even if a
+  // stale keyboard inset lingered from the last time it was open.
+  const kbInset = open ? kb.inset : 0;
+
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 80, pointerEvents: open ? 'auto' : 'none' }}>
       <div
@@ -237,12 +259,14 @@ export function Sheet({
       />
       <div
         style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
+          position: 'absolute', left: 0, right: 0, bottom: kbInset,
           background: 'var(--surface)', borderRadius: '28px 28px 0 0',
           borderTop: '1px solid var(--line-strong)',
           transform: open ? 'translateY(0)' : 'translateY(110%)',
           transition: 'transform .34s cubic-bezier(.32,.72,0,1)',
-          paddingBottom: 'calc(38px + env(safe-area-inset-bottom, 0px))', maxHeight: '92dvh', overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain',
+          paddingBottom: kbInset > 0 ? 18 : 'calc(38px + env(safe-area-inset-bottom, 0px))',
+          maxHeight: kbInset > 0 ? `${kb.vh - 12}px` : '92dvh',
+          overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain',
           boxShadow: '0 -20px 50px rgba(0,0,0,0.5)',
         }}
       >
