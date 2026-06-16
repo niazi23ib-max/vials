@@ -301,18 +301,36 @@ export async function GET(req: Request) {
     }
   }
 
-  // 2. Re-reminders — send, then disarm (next_at → null). Clear the rest.
-  for (const { r, sub } of reReminders) {
-    const label = doseLabelOn(sub, r.scheduled_date);
-    sent += await pushToUser(r.user_id, JSON.stringify({
-      title: `Reminder: ${sub.name}`, body: `Still need this? · ${label}`,
-      url: deepLink(sub.id, r.scheduled_date, r.slot), tag: `dose-${sub.id}-${r.scheduled_date}-${r.slot}`,
-      kind: 'dose', sub: sub.id, date: r.scheduled_date, slot: r.slot,
-    }));
-    await db.from('reminder_log').update({ next_at: null })
-      .eq('substance_id', r.substance_id).eq('scheduled_date', r.scheduled_date).eq('slot', r.slot);
+  // 2. Re-reminders (follow-ups + snoozes) — bundle same-time ones into a single
+  //    notification (same grouping as primary), send, then disarm (next_at → null).
+  const reGroups = new Map<string, { r: RemRow; sub: Substance }[]>();
+  for (const item of reReminders) {
+    const time = item.r.slot || item.sub.time; // slot is the HH:MM for multi-dose; '' → the sub's single time
+    const key = `${item.r.user_id}|${item.r.scheduled_date}|${time}`;
+    const arr = reGroups.get(key);
+    if (arr) arr.push(item); else reGroups.set(key, [item]);
   }
-  for (const r of toClear) {
+  for (const [, items] of reGroups) {
+    const u = items[0].r.user_id;
+    if (items.length === 1) {
+      const { r, sub } = items[0];
+      const label = doseLabelOn(sub, r.scheduled_date);
+      sent += await pushToUser(u, JSON.stringify({
+        title: `Reminder: ${sub.name}`, body: `Still need this? · ${label}`,
+        url: deepLink(sub.id, r.scheduled_date, r.slot), tag: `dose-${sub.id}-${r.scheduled_date}-${r.slot}`,
+        kind: 'dose', sub: sub.id, date: r.scheduled_date, slot: r.slot,
+      }));
+    } else {
+      const names = items.map((i) => i.sub.name).join(', ');
+      const first = items[0].r;
+      sent += await pushToUser(u, JSON.stringify({
+        title: `${items.length} doses still due`, body: names, url: '/',
+        tag: `regroup-${u}-${first.scheduled_date}-${first.slot || items[0].sub.time}`, kind: 'group',
+      }));
+    }
+  }
+  // Disarm everything we acted on: the re-reminded (sent above) and the logged/orphaned.
+  for (const r of [...reReminders.map((x) => x.r), ...toClear]) {
     await db.from('reminder_log').update({ next_at: null })
       .eq('substance_id', r.substance_id).eq('scheduled_date', r.scheduled_date).eq('slot', r.slot);
   }
