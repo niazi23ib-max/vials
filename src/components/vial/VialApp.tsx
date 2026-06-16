@@ -284,8 +284,16 @@ export function VialApp() {
   const open = useCallback((subId: string) => setDetailId(subId), []);
   const log = useCallback((subId?: string) => setSheet({ open: true, subId: subId ?? null }), []);
   const openLog = useCallback(() => setSheet({ open: true, subId: null }), []);
-  const confirmLog = useCallback((subId: string, slot = '', site?: string | null) => setStatus(subId, todayISO, slot, 'taken', site), [setStatus, todayISO]);
-  const skipLog = useCallback((subId?: string, slot = '') => { if (subId) setStatus(subId, todayISO, slot, 'skipped'); }, [setStatus, todayISO]);
+  // After logging, also pop the Detail screen (if open) so you land back on the
+  // list and can see the dose registered. No-op when logging from Today/the list.
+  const confirmLog = useCallback((subId: string, slot = '', site?: string | null) => {
+    setStatus(subId, todayISO, slot, 'taken', site);
+    setDetailId(null);
+  }, [setStatus, todayISO]);
+  const skipLog = useCallback((subId?: string, slot = '') => {
+    if (subId) setStatus(subId, todayISO, slot, 'skipped');
+    setDetailId(null);
+  }, [setStatus, todayISO]);
   const addSubstance = useCallback(async (sub: Substance) => {
     const created = await db.createSubstance(sub);
     setSubs((prev) => [...prev, created]);
