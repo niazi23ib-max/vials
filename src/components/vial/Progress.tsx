@@ -152,13 +152,16 @@ function MetricSheet({
           <Label style={{ marginBottom: 7 }}>Note</Label>
           <textarea className="vlf" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="How you feel, side effects…" style={{ ...field, resize: 'none', fontFamily: 'var(--sans)', fontSize: 14 }} />
         </div>
-        <button
-          onClick={save}
-          disabled={!canSave}
-          style={{ marginTop: 4, width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: canSave ? 'var(--amber)' : 'var(--surface-2)', color: canSave ? 'var(--bg)' : 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, cursor: canSave ? 'pointer' : 'default' }}
-        >
-          {editing ? 'Save changes' : 'Save entry'}
-        </button>
+        {/* Sticky so it stays visible above the keyboard even if the fields scroll. */}
+        <div style={{ position: 'sticky', bottom: 0, background: 'var(--surface)', paddingTop: 10, paddingBottom: 4 }}>
+          <button
+            onClick={save}
+            disabled={!canSave}
+            style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: canSave ? 'var(--amber)' : 'var(--surface-2)', color: canSave ? 'var(--bg)' : 'var(--text-faint)', fontFamily: 'var(--mono)', fontSize: 14, fontWeight: 600, cursor: canSave ? 'pointer' : 'default' }}
+          >
+            {editing ? 'Save changes' : 'Save entry'}
+          </button>
+        </div>
       </div>
     </Sheet>
   );

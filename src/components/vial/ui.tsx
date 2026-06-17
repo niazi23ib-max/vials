@@ -233,9 +233,14 @@ export function Sheet({
   useEffect(() => {
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (!open || !vv) return;
+    // Measure the keyboard against the tallest viewport we've seen (the no-keyboard
+    // height) rather than window.innerHeight — in an installed iOS PWA innerHeight
+    // can shrink with the keyboard, which would zero out the inset.
+    let maxH = vv.height;
     const update = () => {
-      const overlap = window.innerHeight - vv.height - vv.offsetTop;
-      setKb(overlap > 80 ? { inset: Math.round(overlap), vh: Math.round(vv.height) } : { inset: 0, vh: 0 });
+      if (vv.height > maxH) maxH = vv.height;
+      const overlap = maxH - vv.height;
+      setKb(overlap > 100 ? { inset: Math.round(overlap), vh: Math.round(vv.height) } : { inset: 0, vh: 0 });
     };
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
