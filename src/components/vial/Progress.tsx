@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { isoDate, ok } from '@/lib/substances';
 import {
   weightSeries, weightSummary, fmtNum, getWeightUnit, setWeightUnit,
@@ -268,7 +269,13 @@ export const ProgressScreen = memo(function ProgressScreen({ app }: { app: AppAp
       <AdherencePanel app={app} />
       <Reminders />
 
-      <MetricSheet open={sheet} onClose={() => setSheet(false)} app={app} unit={unit} editing={editing} />
+      {/* Portal to the app shell so the sheet escapes the scrolling content area's
+          iOS stacking context (-webkit-overflow-scrolling) — otherwise its z-index
+          can't rise above the fixed bottom nav and the Save button gets clipped. */}
+      {createPortal(
+        <MetricSheet open={sheet} onClose={() => setSheet(false)} app={app} unit={unit} editing={editing} />,
+        document.getElementById('vial-shell') ?? document.body,
+      )}
     </div>
   );
 });
