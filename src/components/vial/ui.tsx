@@ -239,8 +239,11 @@ export function Sheet({
     let maxH = vv.height;
     const update = () => {
       if (vv.height > maxH) maxH = vv.height;
-      const overlap = maxH - vv.height;
-      setKb(overlap > 100 ? { inset: Math.round(overlap), vh: Math.round(vv.height) } : { inset: 0, vh: 0 });
+      // Keyboard overlap = how much of the viewport bottom the keyboard covers,
+      // minus the upward shift iOS already applied to the fixed shell (offsetTop).
+      // Without the offsetTop term we double-lift and leave a gap above the keyboard.
+      const overlap = Math.max(0, maxH - vv.height - vv.offsetTop);
+      setKb(overlap > 40 ? { inset: Math.round(overlap), vh: Math.round(vv.height) } : { inset: 0, vh: 0 });
     };
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
