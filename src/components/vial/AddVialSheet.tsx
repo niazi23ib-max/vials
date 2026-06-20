@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   recon, suggestReconOptions, pickHue, newId, defaultExpiryISO, DAY_ORDER, CATEGORIES, routesFor, formOf, isoDate, categoryHasStrength,
-  addDaysISO, daysUntil, RECON_DEFAULT_BUD,
+  addDaysISO, daysUntil, RECON_DEFAULT_BUD, effectiveDoseMcg,
   type Substance, type ScheduleKind, type BlendComponent,
 } from '@/lib/substances';
 import { Sheet, Label, Icon } from './ui';
@@ -217,10 +217,13 @@ export function AddVialSheet({
       setCount(editing.count ? String(editing.count) : '');
       setCapsPerDose(String(editing.capsPerDose || 1));
       setDoseUnit(editing.unit);
+      // Prefill the effective (titration-aware) dose so the form matches what's shown
+      // on Today/Schedule. For non-titrating items this equals the base dose.
+      const effMcg = effectiveDoseMcg(editing, isoDate(new Date()));
       setDoseValue(
         f === 'oral'
           ? String(editing.doseMcg || '')
-          : String(editing.unit === 'mg' ? editing.doseMcg / 1000 : editing.doseMcg),
+          : String(editing.unit === 'mg' ? effMcg / 1000 : effMcg),
       );
       setAmountLeft(String(f === 'oral' ? editing.remaining : +(editing.remaining / 1000).toFixed(4)));
       setDays(editing.days.length ? [...editing.days] : []);
@@ -374,6 +377,15 @@ export function AddVialSheet({
     const cw = Math.max(0, Math.floor(Number(courseWeeks) || 0));
     const anchorISO = startDate || isoDate(new Date());
     const selDays = DAY_ORDER.filter((d) => days.includes(d));
+    // Keep an active date-less titration ramp's current step in sync with the edited
+    // dose so the change takes effect immediately (effectiveDoseMcg follows the
+    // current step, not the base dose, when a ramp exists). Dated ramps + oral untouched.
+    const prevTitration = editing ? editing.titration : null;
+    const syncedTitration =
+      prevTitration && prevTitration.length && form !== 'oral' && doseMcgInject > 0 &&
+      !prevTitration.some((t) => t.start) && prevTitration.some((t) => t.current)
+        ? prevTitration.map((t) => (t.current ? { ...t, mcg: doseMcgInject } : t))
+        : prevTitration;
     const common = {
       name: name.trim(),
       category,
@@ -397,7 +409,7 @@ export function AddVialSheet({
       reconstitutedAt: form === 'inject' ? reconAt : '',
       budDays: form === 'inject' && Number(budDaysStr) > 0 ? Math.floor(Number(budDaysStr)) : 0,
       remindersEnabled: remindersOn,
-      titration: editing ? editing.titration : null,
+      titration: syncedTitration,
       hue: editing ? editing.hue : pickHue(app.substances.length),
       created: editing ? editing.created : '', // server stamps created_at; refreshed on reload
     };
